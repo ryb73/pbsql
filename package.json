@@ -1,0 +1,23 @@
+{
+  "name": "cabinet-sql",
+  "version": "0.1.0",
+  "packageManager": "yarn@4.0.1",
+  "exports": {
+    "./nodejs": {
+      "import": {
+        "types": "./pkg-nodejs/cabinet_sql.d.ts",
+        "default": "./pkg-nodejs/cabinet_sql.cjs"
+      }
+    },
+    "./bundler": {
+      "import": {
+        "types": "./pkg-bundler/cabinet_sql.d.ts",
+        "default": "./pkg-bundler/cabinet_sql.js"
+      }
+    }
+  },
+  "files": [
+    "pkg-bundler",
+    "pkg-nodejs"
+  ]
+}
