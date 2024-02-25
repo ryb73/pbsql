@@ -1,18 +1,18 @@
 {
-  "name": "cabinet-sql",
+  "name": "@ryb73/pbsql",
   "version": "0.1.0",
   "packageManager": "yarn@4.0.1",
   "exports": {
     "./nodejs": {
       "import": {
-        "types": "./pkg-nodejs/cabinet_sql.d.ts",
-        "default": "./pkg-nodejs/cabinet_sql.cjs"
+        "types": "./pkg-nodejs/pbsql.d.ts",
+        "default": "./pkg-nodejs/pbsql.cjs"
       }
     },
     "./bundler": {
       "import": {
-        "types": "./pkg-bundler/cabinet_sql.d.ts",
-        "default": "./pkg-bundler/cabinet_sql.js"
+        "types": "./pkg-bundler/pbsql.d.ts",
+        "default": "./pkg-bundler/pbsql.js"
       }
     }
   },
