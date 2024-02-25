@@ -1,7 +1,7 @@
 {
   "name": "pbsql",
   "version": "0.1.0",
-  "packageManager": "yarn@4.0.1",
+  "license": "GPL-3.0-only",
   "exports": {
     "./bundler": {
       "import": {
