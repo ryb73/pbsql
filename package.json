@@ -1,5 +1,5 @@
 {
-  "name": "@ryb73/pbsql",
+  "name": "pbsql",
   "version": "0.1.0",
   "packageManager": "yarn@4.0.1",
   "exports": {
