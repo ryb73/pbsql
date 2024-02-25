@@ -3,16 +3,16 @@
   "version": "0.1.0",
   "packageManager": "yarn@4.0.1",
   "exports": {
-    "./nodejs": {
-      "import": {
-        "types": "./pkg-nodejs/pbsql.d.ts",
-        "default": "./pkg-nodejs/pbsql.cjs"
-      }
-    },
     "./bundler": {
       "import": {
         "types": "./pkg-bundler/pbsql.d.ts",
         "default": "./pkg-bundler/pbsql.js"
+      }
+    },
+    "./nodejs": {
+      "import": {
+        "types": "./pkg-nodejs/pbsql.d.ts",
+        "default": "./pkg-nodejs/pbsql.cjs"
       }
     }
   },
