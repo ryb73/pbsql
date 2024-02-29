@@ -2,8 +2,8 @@ use serde::Serialize;
 use sqlparser::{
     ast::{
         self, Assignment, Expr, Function, FunctionArg, FunctionArgExpr, GroupByExpr,
-        HiveDistributionStyle, Ident, Join, JoinConstraint, JoinOperator, ObjectName, Offset,
-        OrderByExpr, Select, SelectItem, SetExpr,
+        HiveDistributionStyle, Ident, Join, JoinConstraint, JoinOperator, ObjectName, ObjectType,
+        Offset, OrderByExpr, Select, SelectItem, SetExpr,
         Statement::{self, CreateIndex, CreateTable, Insert},
         TableAlias, TableFactor, TableWithJoins, Value, Values, WildcardAdditionalOptions,
     },
@@ -55,6 +55,8 @@ fn translate_query(ast: Vec<Statement>) -> Result<TranslatedQuery<Vec<Statement>
                 &query,
                 &mut database_names,
             )?)),
+            Statement::Drop { .. } => translate_drop(&statement, &mut database_names),
+
             Statement::Analyze { .. } => Err("not implemented: Statement::Analyze".to_string()),
             Statement::Truncate { .. } => Err("not implemented: Statement::Truncate".to_string()),
             Statement::Msck { .. } => Err("not implemented: Statement::Msck".to_string()),
@@ -69,7 +71,6 @@ fn translate_query(ast: Vec<Statement>) -> Result<TranslatedQuery<Vec<Statement>
             Statement::AttachDatabase { .. } => {
                 Err("not implemented: Statement::AttachDatabase".to_string())
             }
-            Statement::Drop { .. } => Err("not implemented: Statement::Drop".to_string()),
             Statement::DropFunction { .. } => {
                 Err("not implemented: Statement::DropFunction".to_string())
             }
@@ -197,6 +198,74 @@ fn translate_query(ast: Vec<Statement>) -> Result<TranslatedQuery<Vec<Statement>
     })
 }
 
+fn translate_drop(
+    statement: &Statement,
+    database_names: &mut HashMap<String, String>,
+) -> Result<Statement, String> {
+    match statement {
+        Statement::Drop {
+            cascade,
+            if_exists,
+            names,
+            object_type,
+            purge,
+            restrict,
+            temporary,
+        } => {
+            match object_type {
+                ObjectType::Table => {}
+                ObjectType::View => Err("not implemented: Statement::Drop::View".to_string())?,
+                ObjectType::Index => Err("not implemented: Statement::Drop::Index".to_string())?,
+                ObjectType::Schema => Err("not implemented: Statement::Drop::Schema".to_string())?,
+                ObjectType::Role => Err("not implemented: Statement::Drop::Role".to_string())?,
+                ObjectType::Sequence => {
+                    Err("not implemented: Statement::Drop::Sequence".to_string())?
+                }
+                ObjectType::Stage => Err("not implemented: Statement::Drop::Stage".to_string())?,
+            };
+
+            if *cascade {
+                Err("not implemented: Statement::Drop::cascade".to_string())?;
+            };
+
+            if *purge {
+                Err("not implemented: Statement::Drop::purge".to_string())?;
+            };
+
+            if *restrict {
+                Err("not implemented: Statement::Drop::restrict".to_string())?;
+            };
+
+            if *temporary {
+                Err("not implemented: Statement::Drop::temporary".to_string())?;
+            };
+
+            let new_names = names
+                .iter()
+                .map(|name| {
+                    let db_reference = convert_path_to_database(name, database_names)?;
+                    Ok(ObjectName(get_qualified_values_table_identifiers(
+                        &db_reference,
+                    )))
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+
+            Ok(Statement::Drop {
+                cascade: false,
+                if_exists: *if_exists,
+                names: new_names,
+                object_type: ObjectType::Table,
+                purge: false,
+                restrict: false,
+                temporary: false,
+            })
+        }
+        _ => {
+            unreachable!("Expected a Drop statement")
+        }
+    }
+}
+
 fn translate_update(
     statement: &Statement,
     databases: &mut DatabaseNamesByPath,
@@ -247,7 +316,7 @@ fn translate_update(
             })
         }
         _ => {
-            panic!("Expected an Update statement");
+            unreachable!("Expected an Update statement");
         }
     }
 }
@@ -413,7 +482,7 @@ fn translate_create_table(
             strict: false,
         })
     } else {
-        panic!("Expected a CreateTable statement");
+        unreachable!("Expected a CreateTable statement");
     }
 }
 
@@ -472,7 +541,7 @@ fn translate_create_index(
             })
         }
         _ => {
-            panic!("Expected a CreateIndex statement");
+            unreachable!("Expected a CreateIndex statement");
         }
     }
 }
@@ -521,7 +590,7 @@ fn translate_insert(
             })
         }
         _ => {
-            panic!("Expected an Insert statement");
+            unreachable!("Expected an Insert statement");
         }
     }
 }
@@ -689,7 +758,7 @@ fn translate_set_operation(
             })
         }
         _ => {
-            panic!("Expected a SetOperation SetExpr");
+            unreachable!("Expected a SetOperation SetExpr");
         }
     }
 }
@@ -929,7 +998,7 @@ fn translate_table_factor_derived(
             })
         }
         _ => {
-            panic!("Expected a Derived TableFactor");
+            unreachable!("Expected a Derived TableFactor");
         }
     }
 }
@@ -1257,7 +1326,7 @@ fn translate_in_subquery(
                 subquery: new_subquery,
             })
         }
-        _ => panic!("Expected an InSubquery expression"),
+        _ => unreachable!("Expected an InSubquery expression"),
     }
 }
 
@@ -2300,6 +2369,48 @@ mod tests {
             assert_eq!(
                 query,
                 vec![[r#"SELECT *"#, r#" FROM main.table_contents"#,].join(""),]
+            );
+        } else {
+            panic!("Unexpected result: {:?}", translate_result);
+        }
+    }
+
+    #[test]
+    fn drop_table() {
+        let sql = r#"drop table "~/heyy""#;
+
+        let translate_result = translate_sql(sql);
+
+        if let Ok(TranslatedQuery { databases, query }) = translate_result {
+            assert_eq!(
+                databases,
+                HashMap::from([("~/heyy".to_string(), "main".to_string()),]),
+            );
+
+            assert_eq!(query, vec![[r#"DROP TABLE main.table_contents"#,].join("")]);
+        } else {
+            panic!("Unexpected result: {:?}", translate_result);
+        }
+    }
+
+    #[test]
+    fn drop_multiple_tables() {
+        let sql = r#"drop table "~/heyy", "~/okokok""#;
+
+        let translate_result = translate_sql(sql);
+
+        if let Ok(TranslatedQuery { databases, query }) = translate_result {
+            assert_eq!(
+                databases,
+                HashMap::from([
+                    ("~/heyy".to_string(), "main".to_string()),
+                    ("~/okokok".to_string(), "db1".to_string())
+                ]),
+            );
+
+            assert_eq!(
+                query,
+                vec![[r#"DROP TABLE main.table_contents, db1.table_contents"#,].join("")]
             );
         } else {
             panic!("Unexpected result: {:?}", translate_result);
