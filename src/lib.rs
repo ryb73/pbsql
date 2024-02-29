@@ -55,7 +55,139 @@ fn translate_query(ast: Vec<Statement>) -> Result<TranslatedQuery<Vec<Statement>
                 &query,
                 &mut database_names,
             )?)),
-            _ => Err("Unsupported statement type".to_string()),
+            Statement::Analyze { .. } => Err("not implemented: Statement::Analyze".to_string()),
+            Statement::Truncate { .. } => Err("not implemented: Statement::Truncate".to_string()),
+            Statement::Msck { .. } => Err("not implemented: Statement::Msck".to_string()),
+            Statement::AlterTable { .. } => {
+                Err("not implemented: Statement::AlterTable".to_string())
+            }
+            Statement::AlterIndex { .. } => {
+                Err("not implemented: Statement::AlterIndex".to_string())
+            }
+            Statement::AlterView { .. } => Err("not implemented: Statement::AlterView".to_string()),
+            Statement::AlterRole { .. } => Err("not implemented: Statement::AlterRole".to_string()),
+            Statement::AttachDatabase { .. } => {
+                Err("not implemented: Statement::AttachDatabase".to_string())
+            }
+            Statement::Drop { .. } => Err("not implemented: Statement::Drop".to_string()),
+            Statement::DropFunction { .. } => {
+                Err("not implemented: Statement::DropFunction".to_string())
+            }
+            Statement::Declare { .. } => Err("not implemented: Statement::Declare".to_string()),
+            Statement::CreateExtension { .. } => {
+                Err("not implemented: Statement::CreateExtension".to_string())
+            }
+            Statement::Fetch { .. } => Err("not implemented: Statement::Fetch".to_string()),
+            Statement::Flush { .. } => Err("not implemented: Statement::Flush".to_string()),
+            Statement::Discard { .. } => Err("not implemented: Statement::Discard".to_string()),
+            Statement::SetRole { .. } => Err("not implemented: Statement::SetRole".to_string()),
+            Statement::SetVariable { .. } => {
+                Err("not implemented: Statement::SetVariable".to_string())
+            }
+            Statement::SetTimeZone { .. } => {
+                Err("not implemented: Statement::SetTimeZone".to_string())
+            }
+            Statement::SetNames { .. } => Err("not implemented: Statement::SetNames".to_string()),
+            Statement::SetNamesDefault { .. } => {
+                Err("not implemented: Statement::SetNamesDefault".to_string())
+            }
+            Statement::ShowFunctions { .. } => {
+                Err("not implemented: Statement::ShowFunctions".to_string())
+            }
+            Statement::ShowVariable { .. } => {
+                Err("not implemented: Statement::ShowVariable".to_string())
+            }
+            Statement::ShowVariables { .. } => {
+                Err("not implemented: Statement::ShowVariables".to_string())
+            }
+            Statement::ShowCreate { .. } => {
+                Err("not implemented: Statement::ShowCreate".to_string())
+            }
+            Statement::ShowColumns { .. } => {
+                Err("not implemented: Statement::ShowColumns".to_string())
+            }
+            Statement::ShowTables { .. } => {
+                Err("not implemented: Statement::ShowTables".to_string())
+            }
+            Statement::ShowCollation { .. } => {
+                Err("not implemented: Statement::ShowCollation".to_string())
+            }
+            Statement::Use { .. } => Err("not implemented: Statement::Use".to_string()),
+            Statement::StartTransaction { .. } => {
+                Err("not implemented: Statement::StartTransaction".to_string())
+            }
+            Statement::SetTransaction { .. } => {
+                Err("not implemented: Statement::SetTransaction".to_string())
+            }
+            Statement::Comment { .. } => Err("not implemented: Statement::Comment".to_string()),
+            Statement::Commit { .. } => Err("not implemented: Statement::Commit".to_string()),
+            Statement::Rollback { .. } => Err("not implemented: Statement::Rollback".to_string()),
+            Statement::CreateSchema { .. } => {
+                Err("not implemented: Statement::CreateSchema".to_string())
+            }
+            Statement::CreateDatabase { .. } => {
+                Err("not implemented: Statement::CreateDatabase".to_string())
+            }
+            Statement::CreateFunction { .. } => {
+                Err("not implemented: Statement::CreateFunction".to_string())
+            }
+            Statement::CreateProcedure { .. } => {
+                Err("not implemented: Statement::CreateProcedure".to_string())
+            }
+            Statement::CreateMacro { .. } => {
+                Err("not implemented: Statement::CreateMacro".to_string())
+            }
+            Statement::CreateStage { .. } => {
+                Err("not implemented: Statement::CreateStage".to_string())
+            }
+            Statement::Assert { .. } => Err("not implemented: Statement::Assert".to_string()),
+            Statement::Grant { .. } => Err("not implemented: Statement::Grant".to_string()),
+            Statement::Revoke { .. } => Err("not implemented: Statement::Revoke".to_string()),
+            Statement::Deallocate { .. } => {
+                Err("not implemented: Statement::Deallocate".to_string())
+            }
+            Statement::Execute { .. } => Err("not implemented: Statement::Execute".to_string()),
+            Statement::Prepare { .. } => Err("not implemented: Statement::Prepare".to_string()),
+            Statement::Kill { .. } => Err("not implemented: Statement::Kill".to_string()),
+            Statement::ExplainTable { .. } => {
+                Err("not implemented: Statement::ExplainTable".to_string())
+            }
+            Statement::Explain { .. } => Err("not implemented: Statement::Explain".to_string()),
+            Statement::Savepoint { .. } => Err("not implemented: Statement::Savepoint".to_string()),
+            Statement::ReleaseSavepoint { .. } => {
+                Err("not implemented: Statement::ReleaseSavepoint".to_string())
+            }
+            Statement::Merge { .. } => Err("not implemented: Statement::Merge".to_string()),
+            Statement::Cache { .. } => Err("not implemented: Statement::Cache".to_string()),
+            Statement::UNCache { .. } => Err("not implemented: Statement::UNCache".to_string()),
+            Statement::CreateSequence { .. } => {
+                Err("not implemented: Statement::CreateSequence".to_string())
+            }
+            Statement::CreateType { .. } => {
+                Err("not implemented: Statement::CreateType".to_string())
+            }
+            Statement::Pragma { .. } => Err("not implemented: Statement::Pragma".to_string()),
+            Statement::LockTables { .. } => {
+                Err("not implemented: Statement::LockTables".to_string())
+            }
+            Statement::UnlockTables => Err("not implemented: Statement::UnlockTables".to_string()),
+            Statement::Directory { .. } => Err("not implemented: Statement::Directory".to_string()),
+            Statement::Call(_) => Err("not implemented: Statement::Call".to_string()),
+            Statement::Copy { .. } => Err("not implemented: Statement::Copy".to_string()),
+            Statement::CopyIntoSnowflake { .. } => {
+                Err("not implemented: Statement::CopyIntoSnowflake".to_string())
+            }
+            Statement::Close { .. } => Err("not implemented: Statement::Close".to_string()),
+            Statement::Delete { .. } => Err("not implemented: Statement::Delete".to_string()),
+            Statement::CreateView { .. } => {
+                Err("not implemented: Statement::CreateView".to_string())
+            }
+            Statement::CreateVirtualTable { .. } => {
+                Err("not implemented: Statement::CreateVirtualTable".to_string())
+            }
+            Statement::CreateRole { .. } => {
+                Err("not implemented: Statement::CreateRole".to_string())
+            }
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -1446,7 +1578,7 @@ mod tests {
         let translate_result = translate_sql(sql);
 
         if let Err(err) = translate_result {
-            assert_eq!(err, "Unsupported statement type");
+            assert_eq!(err, "not implemented: Statement::Close");
         } else {
             panic!("Expected error, got: {:?}", translate_result);
         }
