@@ -5,7 +5,7 @@ use sqlparser::{
         HiveDistributionStyle, Ident, Join, JoinConstraint, JoinOperator, ObjectName, Offset,
         OrderByExpr, Select, SelectItem, SetExpr,
         Statement::{self, CreateIndex, CreateTable, Insert},
-        TableAlias, TableFactor, TableWithJoins, Value, Values,
+        TableAlias, TableFactor, TableWithJoins, Value, Values, WildcardAdditionalOptions,
     },
     dialect::SQLiteDialect,
     parser::Parser,
@@ -1088,12 +1088,47 @@ fn translate_select_item(
                 alias: alias.clone(),
             })
         }
+        SelectItem::Wildcard(wildcard_options) => {
+            let new_wildcard_options = translate_wildcard_options(wildcard_options)?;
+            Ok(SelectItem::Wildcard(new_wildcard_options))
+        }
 
         SelectItem::QualifiedWildcard(_, _) => {
             Err("not implemented: SelectItem::QualifiedWildcard".to_string())
         }
-        SelectItem::Wildcard(_) => Err("not implemented: SelectItem::Wildcard".to_string()),
     }
+}
+
+fn translate_wildcard_options(
+    WildcardAdditionalOptions {
+        opt_except,
+        opt_exclude,
+        opt_rename,
+        opt_replace,
+    }: &WildcardAdditionalOptions,
+) -> Result<WildcardAdditionalOptions, String> {
+    if opt_except.is_some() {
+        return Err("not implemented: WildcardAdditionalOptions::opt_except".to_string());
+    }
+
+    if opt_exclude.is_some() {
+        return Err("not implemented: WildcardAdditionalOptions::opt_exclude".to_string());
+    }
+
+    if opt_rename.is_some() {
+        return Err("not implemented: WildcardAdditionalOptions::opt_rename".to_string());
+    }
+
+    if opt_replace.is_some() {
+        return Err("not implemented: WildcardAdditionalOptions::opt_replace".to_string());
+    }
+
+    Ok(WildcardAdditionalOptions {
+        opt_except: None,
+        opt_exclude: None,
+        opt_rename: None,
+        opt_replace: None,
+    })
 }
 
 fn translate_expr(
@@ -2244,6 +2279,27 @@ mod tests {
                     r#" LIMIT ?"#,
                 ]
                 .join(""),]
+            );
+        } else {
+            panic!("Unexpected result: {:?}", translate_result);
+        }
+    }
+
+    #[test]
+    fn select_wildcard() {
+        let sql = r#"select * from "~/heyy""#;
+
+        let translate_result = translate_sql(sql);
+
+        if let Ok(TranslatedQuery { databases, query }) = translate_result {
+            assert_eq!(
+                databases,
+                HashMap::from([("~/heyy".to_string(), "main".to_string()),]),
+            );
+
+            assert_eq!(
+                query,
+                vec![[r#"SELECT *"#, r#" FROM main.table_contents"#,].join(""),]
             );
         } else {
             panic!("Unexpected result: {:?}", translate_result);
