@@ -1,7 +1,8 @@
 {
   "name": "pbsql",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "license": "GPL-3.0-only",
+  "type": "module",
   "exports": {
     "./bundler": {
       "import": {
@@ -17,7 +18,7 @@
     }
   },
   "files": [
-    "pkg-bundler",
-    "pkg-nodejs"
+    "./pkg-bundler",
+    "./pkg-nodejs"
   ]
 }
