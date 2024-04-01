@@ -3,7 +3,7 @@ use sqlparser::{
     ast::{
         self, Assignment, Expr, Function, FunctionArg, FunctionArgExpr, GroupByExpr,
         HiveDistributionStyle, Ident, Join, JoinConstraint, JoinOperator, ObjectName, ObjectType,
-        Offset, OrderByExpr, Select, SelectItem, SetExpr,
+        Offset, OnConflict, OnConflictAction, OnInsert, OrderByExpr, Select, SelectItem, SetExpr,
         Statement::{self, CreateIndex, CreateTable, Insert},
         TableAlias, TableFactor, TableWithJoins, Value, Values, WildcardAdditionalOptions,
     },
@@ -341,7 +341,7 @@ fn translate_sql(query: &str) -> Result<TranslatedQuery<Vec<String>>, String> {
 
     let ast = Parser::parse_sql(&dialect, query).map_err(|e| e.to_string())?;
 
-    // println!("AST: {:#?}", ast);
+    println!("AST: {:#?}", ast);
 
     let TranslatedQuery { databases, query } = translate_query(ast)?;
 
@@ -562,8 +562,28 @@ fn translate_insert(
             replace_into,
             table,
             source,
-            ..
+            after_columns,
+            on,
+            partitioned,
+            priority,
+            returning,
         } => {
+            if !after_columns.is_empty() {
+                return Err("not implemented: Insert::after_columns".to_string());
+            }
+
+            if partitioned.is_some() {
+                return Err("not implemented: Insert::partitioned".to_string());
+            }
+
+            if priority.is_some() {
+                return Err("not implemented: Insert::priority".to_string());
+            }
+
+            if returning.is_some() {
+                return Err("not implemented: Insert::returning".to_string());
+            }
+
             let translated_db_name = convert_path_to_database(table_name, databases)?;
 
             let new_source = source
@@ -571,26 +591,64 @@ fn translate_insert(
                 .map(|s| translate_ast_query(s, databases))
                 .transpose()?;
 
+            let new_on = translate_on_insert(on)?;
+
             Ok(Insert {
                 after_columns: vec![],
+                columns: columns.clone(),
                 ignore: *ignore,
                 into: *into,
-                on: None,
+                on: new_on,
                 or: *or,
-                columns: columns.clone(),
-                table_name: ObjectName(get_qualified_values_table_identifiers(&translated_db_name)),
                 overwrite: *overwrite,
+                replace_into: *replace_into,
+                source: new_source,
+                table_alias: table_alias.clone(),
+                table_name: ObjectName(get_qualified_values_table_identifiers(&translated_db_name)),
+                table: *table,
+
                 partitioned: None,
                 priority: None,
-                replace_into: *replace_into,
                 returning: None,
-                table: *table,
-                table_alias: table_alias.clone(),
-                source: new_source,
             })
         }
         _ => {
             unreachable!("Expected an Insert statement");
+        }
+    }
+}
+
+fn translate_on_insert(on: &Option<OnInsert>) -> Result<Option<OnInsert>, String> {
+    match on {
+        Some(OnInsert::OnConflict(on_conflict)) => translate_on_conflict(on_conflict),
+        None => Ok(None),
+
+        Some(OnInsert::DuplicateKeyUpdate(..)) => {
+            Err("not implemented: OnInsert::DuplicateKeyUpdate".to_string())
+        }
+
+        &Some(_) => Err("Unrecognized OnInsert variant".to_string()),
+    }
+}
+
+fn translate_on_conflict(
+    OnConflict {
+        action,
+        conflict_target,
+    }: &OnConflict,
+) -> Result<Option<OnInsert>, String> {
+    if conflict_target.is_some() {
+        return Err("not implemented: OnConflict::conflict_target".to_string());
+    }
+
+    match action {
+        OnConflictAction::DoNothing => Ok(Some(OnInsert::OnConflict(OnConflict {
+            action: OnConflictAction::DoNothing,
+            conflict_target: None,
+        }))),
+
+        OnConflictAction::DoUpdate(_) => {
+            Err("not implemented: OnConflictAction::DoUpdate".to_string())
         }
     }
 }
@@ -2426,6 +2484,41 @@ mod tests {
             assert_eq!(
                 query,
                 vec![[r#"DROP TABLE main.table_contents, db1.table_contents"#,].join("")]
+            );
+        } else {
+            panic!("Unexpected result: {:?}", translate_result);
+        }
+    }
+
+    #[test]
+    fn on_conflict_do_nothing() {
+        let sql = r#"
+            insert into "~/my-data-scraper/reelgood/shows-and-movies"
+            ("format", "isWatched", "name", "url", "imageUrl")
+            values (?, ?, ?, ?, ?)
+            on conflict do nothing
+        "#;
+
+        let translate_result = translate_sql(sql);
+
+        if let Ok(TranslatedQuery { databases, query }) = translate_result {
+            assert_eq!(
+                databases,
+                HashMap::from([(
+                    "~/my-data-scraper/reelgood/shows-and-movies".to_string(),
+                    "main".to_string()
+                ),]),
+            );
+
+            assert_eq!(
+                query,
+                vec![[
+                    r#"INSERT INTO main.table_contents"#,
+                    r#" ("format", "isWatched", "name", "url", "imageUrl")"#,
+                    r#" VALUES (?, ?, ?, ?, ?)"#,
+                    r#" ON CONFLICT DO NOTHING"#
+                ]
+                .join("")]
             );
         } else {
             panic!("Unexpected result: {:?}", translate_result);
