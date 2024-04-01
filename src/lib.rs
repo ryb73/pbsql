@@ -1460,6 +1460,7 @@ fn translate_value(value: &Value) -> Result<Value, String> {
         }
         Value::SingleQuotedString(_) => Ok(value.clone()),
         Value::Number(_, _) => Ok(value.clone()),
+        Value::Null => Ok(value.clone()),
 
         Value::DollarQuotedString(_) => {
             Err("Unhandled value: Value::DollarQuotedString".to_string())
@@ -1482,7 +1483,6 @@ fn translate_value(value: &Value) -> Result<Value, String> {
             Err("Unhandled value: Value::DoubleQuotedString".to_string())
         }
         Value::Boolean(_) => Err("Unhandled value: Value::Boolean".to_string()),
-        Value::Null => Err("Unhandled value: Value::Null".to_string()),
         Value::UnQuotedString(_) => Err("Unhandled value: Value::UnQuotedString".to_string()),
     }
 }
@@ -2080,6 +2080,21 @@ mod tests {
                 ]
                 .join(""),]
             );
+        } else {
+            panic!("Unexpected result: {:?}", translate_result);
+        }
+    }
+
+    #[test]
+    fn select_null() {
+        let sql = "SELECT null";
+
+        let translate_result = translate_sql(sql);
+
+        if let Ok(TranslatedQuery { databases, query }) = translate_result {
+            assert_eq!(databases.is_empty(), true,);
+
+            assert_eq!(query, vec!["SELECT NULL".to_string()]);
         } else {
             panic!("Unexpected result: {:?}", translate_result);
         }
