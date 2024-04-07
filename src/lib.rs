@@ -41,278 +41,1442 @@ struct TranslatedQuery<Query> {
     query: Query,
 }
 
-fn translate_statement(
-    statement: Statement,
-    database_names: &mut HashMap<String, String>,
-) -> Result<Statement, String> {
-    match statement {
-        CreateTable { .. } => translate_create_table(&statement, database_names),
-        CreateIndex { .. } => translate_create_index(&statement, database_names),
-        Insert { .. } => translate_insert(&statement, database_names),
-        Statement::Update { .. } => translate_update(&statement, database_names),
-        Statement::Query(query) => Ok(Statement::Query(translate_ast_query(
-            &query,
-            database_names,
-        )?)),
-        Statement::Drop { .. } => translate_drop(&statement, database_names),
+trait SqlAstTraverser<Error> {
+    fn new() -> Self;
+    fn traverse(&mut self, ast: Vec<Statement>) -> Result<Vec<Statement>, Error>;
+    fn traverse_statement(&mut self, statement: Statement) -> Result<Statement, Error>;
+    fn traverse_drop(&mut self, drop: &Statement) -> Result<Statement, Error>;
+    fn traverse_update(&mut self, update: &Statement) -> Result<Statement, Error>;
+    fn traverse_assignment(
+        &mut self,
+        assignment: &Assignment,
+        scopes: &Scopes,
+    ) -> Result<Assignment, Error>;
+    fn traverse_create_table(&mut self, create_table: &Statement) -> Result<Statement, Error>;
+    fn traverse_create_index(&mut self, create_index: &Statement) -> Result<Statement, Error>;
+    fn traverse_insert(&mut self, insert: &Statement) -> Result<Statement, Error>;
+    fn traverse_on_insert(
+        &mut self,
+        on_insert: &Option<OnInsert>,
+    ) -> Result<Option<OnInsert>, Error>;
+    fn traverse_on_conflict(&mut self, on_conflict: &OnConflict)
+        -> Result<Option<OnInsert>, Error>;
+    fn traverse_ast_query(&mut self, query: &Box<ast::Query>) -> Result<Box<ast::Query>, Error>;
+    fn traverse_offset(&mut self, offset: &Offset, scopes: &Scopes) -> Result<Offset, Error>;
+    fn traverse_order_by_expr(
+        &mut self,
+        expr: &OrderByExpr,
+        scopes: &Scopes,
+    ) -> Result<OrderByExpr, Error>;
+    fn traverse_set_expr(
+        &mut self,
+        body: &SetExpr,
+        scopes: &Scopes,
+    ) -> Result<(SetExpr, Option<Scope>), Error>;
+    fn traverse_set_operation(&mut self, body: &SetExpr, scopes: &Scopes)
+        -> Result<SetExpr, Error>;
+    fn traverse_table_with_joins(
+        &mut self,
+        table_with_joins: &TableWithJoins,
+        upper_scopes: &Scopes,
+        current_scope: &mut Scope,
+    ) -> Result<TableWithJoins, Error>;
+    fn traverse_join(
+        &mut self,
+        join: &Join,
+        upper_scopes: &Scopes,
+        current_scope: &mut Scope,
+    ) -> Result<Join, Error>;
+    fn traverse_join_operator(
+        &mut self,
+        join_operator: &JoinOperator,
+        scopes: &Scopes,
+    ) -> Result<JoinOperator, Error>;
+    fn traverse_join_constraint(
+        &mut self,
+        constraint: &JoinConstraint,
+        scopes: &Scopes,
+    ) -> Result<JoinConstraint, Error>;
+    fn traverse_table_factor(
+        &mut self,
+        relation: &TableFactor,
+        referencable_tables: &mut ReferencableTables,
+    ) -> Result<TableFactor, Error>;
+    fn traverse_table_factor_derived(
+        &mut self,
+        relation: &TableFactor,
+        referencable_tables: &mut ReferencableTables,
+    ) -> Result<TableFactor, Error>;
+    fn traverse_select_tables(
+        &mut self,
+        tables: &Vec<TableWithJoins>,
+        scopes: &Scopes,
+    ) -> Result<(Vec<TableWithJoins>, Scope), Error>;
+    fn traverse_select(
+        &mut self,
+        select: &Box<Select>,
+        scopes: &Scopes,
+    ) -> Result<(Box<Select>, Scope), Error>;
+    fn traverse_select_item(
+        &mut self,
+        select_item: &SelectItem,
+        scopes: &Scopes,
+    ) -> Result<SelectItem, Error>;
+    fn traverse_expr(&mut self, expr: &Expr, scopes: &Scopes) -> Result<Expr, Error>;
+    fn traverse_in_subquery(&mut self, in_subquery: &Expr, scopes: &Scopes) -> Result<Expr, Error>;
 
-        Statement::Analyze { .. } => Err("not implemented: Statement::Analyze".to_string()),
-        Statement::Truncate { .. } => Err("not implemented: Statement::Truncate".to_string()),
-        Statement::Msck { .. } => Err("not implemented: Statement::Msck".to_string()),
-        Statement::AlterTable { .. } => Err("not implemented: Statement::AlterTable".to_string()),
-        Statement::AlterIndex { .. } => Err("not implemented: Statement::AlterIndex".to_string()),
-        Statement::AlterView { .. } => Err("not implemented: Statement::AlterView".to_string()),
-        Statement::AlterRole { .. } => Err("not implemented: Statement::AlterRole".to_string()),
-        Statement::AttachDatabase { .. } => {
-            Err("not implemented: Statement::AttachDatabase".to_string())
+    fn traverse_function(&mut self, func: &Function, scopes: &Scopes) -> Result<Function, Error>;
+    fn traverse_function_arg(
+        &mut self,
+        function_arg: &FunctionArg,
+        scopes: &Scopes,
+    ) -> Result<FunctionArg, Error>;
+    fn traverse_function_arg_expr(
+        &mut self,
+        function_arg_expr: &FunctionArgExpr,
+        scopes: &Scopes,
+    ) -> Result<FunctionArgExpr, Error>;
+    fn traverse_wildcard_additional_options(
+        &mut self,
+        wildcard_additional_options: &WildcardAdditionalOptions,
+    ) -> Result<WildcardAdditionalOptions, Error>;
+    fn traverse_value(&mut self, value: &Value) -> Result<Value, Error>;
+}
+
+struct PathConvertor {
+    database_names: DatabaseNamesByPath,
+}
+
+impl SqlAstTraverser<String> for PathConvertor {
+    fn new() -> Self {
+        PathConvertor {
+            database_names: HashMap::new(),
         }
-        Statement::DropFunction { .. } => {
-            Err("not implemented: Statement::DropFunction".to_string())
-        }
-        Statement::Declare { .. } => Err("not implemented: Statement::Declare".to_string()),
-        Statement::CreateExtension { .. } => {
-            Err("not implemented: Statement::CreateExtension".to_string())
-        }
-        Statement::Fetch { .. } => Err("not implemented: Statement::Fetch".to_string()),
-        Statement::Flush { .. } => Err("not implemented: Statement::Flush".to_string()),
-        Statement::Discard { .. } => Err("not implemented: Statement::Discard".to_string()),
-        Statement::SetRole { .. } => Err("not implemented: Statement::SetRole".to_string()),
-        Statement::SetVariable { .. } => Err("not implemented: Statement::SetVariable".to_string()),
-        Statement::SetTimeZone { .. } => Err("not implemented: Statement::SetTimeZone".to_string()),
-        Statement::SetNames { .. } => Err("not implemented: Statement::SetNames".to_string()),
-        Statement::SetNamesDefault { .. } => {
-            Err("not implemented: Statement::SetNamesDefault".to_string())
-        }
-        Statement::ShowFunctions { .. } => {
-            Err("not implemented: Statement::ShowFunctions".to_string())
-        }
-        Statement::ShowVariable { .. } => {
-            Err("not implemented: Statement::ShowVariable".to_string())
-        }
-        Statement::ShowVariables { .. } => {
-            Err("not implemented: Statement::ShowVariables".to_string())
-        }
-        Statement::ShowCreate { .. } => Err("not implemented: Statement::ShowCreate".to_string()),
-        Statement::ShowColumns { .. } => Err("not implemented: Statement::ShowColumns".to_string()),
-        Statement::ShowTables { .. } => Err("not implemented: Statement::ShowTables".to_string()),
-        Statement::ShowCollation { .. } => {
-            Err("not implemented: Statement::ShowCollation".to_string())
-        }
-        Statement::Use { .. } => Err("not implemented: Statement::Use".to_string()),
-        Statement::StartTransaction { .. } => {
-            Err("not implemented: Statement::StartTransaction".to_string())
-        }
-        Statement::SetTransaction { .. } => {
-            Err("not implemented: Statement::SetTransaction".to_string())
-        }
-        Statement::Comment { .. } => Err("not implemented: Statement::Comment".to_string()),
-        Statement::Commit { .. } => Err("not implemented: Statement::Commit".to_string()),
-        Statement::Rollback { .. } => Err("not implemented: Statement::Rollback".to_string()),
-        Statement::CreateSchema { .. } => {
-            Err("not implemented: Statement::CreateSchema".to_string())
-        }
-        Statement::CreateDatabase { .. } => {
-            Err("not implemented: Statement::CreateDatabase".to_string())
-        }
-        Statement::CreateFunction { .. } => {
-            Err("not implemented: Statement::CreateFunction".to_string())
-        }
-        Statement::CreateProcedure { .. } => {
-            Err("not implemented: Statement::CreateProcedure".to_string())
-        }
-        Statement::CreateMacro { .. } => Err("not implemented: Statement::CreateMacro".to_string()),
-        Statement::CreateStage { .. } => Err("not implemented: Statement::CreateStage".to_string()),
-        Statement::Assert { .. } => Err("not implemented: Statement::Assert".to_string()),
-        Statement::Grant { .. } => Err("not implemented: Statement::Grant".to_string()),
-        Statement::Revoke { .. } => Err("not implemented: Statement::Revoke".to_string()),
-        Statement::Deallocate { .. } => Err("not implemented: Statement::Deallocate".to_string()),
-        Statement::Execute { .. } => Err("not implemented: Statement::Execute".to_string()),
-        Statement::Prepare { .. } => Err("not implemented: Statement::Prepare".to_string()),
-        Statement::Kill { .. } => Err("not implemented: Statement::Kill".to_string()),
-        Statement::ExplainTable { .. } => {
-            Err("not implemented: Statement::ExplainTable".to_string())
-        }
-        Statement::Explain { .. } => Err("not implemented: Statement::Explain".to_string()),
-        Statement::Savepoint { .. } => Err("not implemented: Statement::Savepoint".to_string()),
-        Statement::ReleaseSavepoint { .. } => {
-            Err("not implemented: Statement::ReleaseSavepoint".to_string())
-        }
-        Statement::Merge { .. } => Err("not implemented: Statement::Merge".to_string()),
-        Statement::Cache { .. } => Err("not implemented: Statement::Cache".to_string()),
-        Statement::UNCache { .. } => Err("not implemented: Statement::UNCache".to_string()),
-        Statement::CreateSequence { .. } => {
-            Err("not implemented: Statement::CreateSequence".to_string())
-        }
-        Statement::CreateType { .. } => Err("not implemented: Statement::CreateType".to_string()),
-        Statement::Pragma { .. } => Err("not implemented: Statement::Pragma".to_string()),
-        Statement::LockTables { .. } => Err("not implemented: Statement::LockTables".to_string()),
-        Statement::UnlockTables => Err("not implemented: Statement::UnlockTables".to_string()),
-        Statement::Directory { .. } => Err("not implemented: Statement::Directory".to_string()),
-        Statement::Call(_) => Err("not implemented: Statement::Call".to_string()),
-        Statement::Copy { .. } => Err("not implemented: Statement::Copy".to_string()),
-        Statement::CopyIntoSnowflake { .. } => {
-            Err("not implemented: Statement::CopyIntoSnowflake".to_string())
-        }
-        Statement::Close { .. } => Err("not implemented: Statement::Close".to_string()),
-        Statement::Delete { .. } => Err("not implemented: Statement::Delete".to_string()),
-        Statement::CreateView { .. } => Err("not implemented: Statement::CreateView".to_string()),
-        Statement::CreateVirtualTable { .. } => {
-            Err("not implemented: Statement::CreateVirtualTable".to_string())
-        }
-        Statement::CreateRole { .. } => Err("not implemented: Statement::CreateRole".to_string()),
     }
-}
 
-fn translate_query(ast: Vec<Statement>) -> Result<TranslatedQuery<Vec<Statement>>, String> {
-    let mut database_names: DatabaseNamesByPath = HashMap::new();
+    fn traverse_statement(&mut self, statement: Statement) -> Result<Statement, String> {
+        match statement {
+            CreateTable { .. } => self.traverse_create_table(&statement),
+            CreateIndex { .. } => self.traverse_create_index(&statement),
+            Insert { .. } => self.traverse_insert(&statement),
+            Statement::Update { .. } => self.traverse_update(&statement),
+            Statement::Query(query) => Ok(Statement::Query(self.traverse_ast_query(&query)?)),
+            Statement::Drop { .. } => self.traverse_drop(&statement),
 
-    let new_statements = ast
-        .into_iter()
-        .map(|s| translate_statement(s, &mut database_names))
-        .collect::<Result<Vec<_>, _>>()?;
+            Statement::Analyze { .. } => Err("not implemented: Statement::Analyze".to_string()),
+            Statement::Truncate { .. } => Err("not implemented: Statement::Truncate".to_string()),
+            Statement::Msck { .. } => Err("not implemented: Statement::Msck".to_string()),
+            Statement::AlterTable { .. } => {
+                Err("not implemented: Statement::AlterTable".to_string())
+            }
+            Statement::AlterIndex { .. } => {
+                Err("not implemented: Statement::AlterIndex".to_string())
+            }
+            Statement::AlterView { .. } => Err("not implemented: Statement::AlterView".to_string()),
+            Statement::AlterRole { .. } => Err("not implemented: Statement::AlterRole".to_string()),
+            Statement::AttachDatabase { .. } => {
+                Err("not implemented: Statement::AttachDatabase".to_string())
+            }
+            Statement::DropFunction { .. } => {
+                Err("not implemented: Statement::DropFunction".to_string())
+            }
+            Statement::Declare { .. } => Err("not implemented: Statement::Declare".to_string()),
+            Statement::CreateExtension { .. } => {
+                Err("not implemented: Statement::CreateExtension".to_string())
+            }
+            Statement::Fetch { .. } => Err("not implemented: Statement::Fetch".to_string()),
+            Statement::Flush { .. } => Err("not implemented: Statement::Flush".to_string()),
+            Statement::Discard { .. } => Err("not implemented: Statement::Discard".to_string()),
+            Statement::SetRole { .. } => Err("not implemented: Statement::SetRole".to_string()),
+            Statement::SetVariable { .. } => {
+                Err("not implemented: Statement::SetVariable".to_string())
+            }
+            Statement::SetTimeZone { .. } => {
+                Err("not implemented: Statement::SetTimeZone".to_string())
+            }
+            Statement::SetNames { .. } => Err("not implemented: Statement::SetNames".to_string()),
+            Statement::SetNamesDefault { .. } => {
+                Err("not implemented: Statement::SetNamesDefault".to_string())
+            }
+            Statement::ShowFunctions { .. } => {
+                Err("not implemented: Statement::ShowFunctions".to_string())
+            }
+            Statement::ShowVariable { .. } => {
+                Err("not implemented: Statement::ShowVariable".to_string())
+            }
+            Statement::ShowVariables { .. } => {
+                Err("not implemented: Statement::ShowVariables".to_string())
+            }
+            Statement::ShowCreate { .. } => {
+                Err("not implemented: Statement::ShowCreate".to_string())
+            }
+            Statement::ShowColumns { .. } => {
+                Err("not implemented: Statement::ShowColumns".to_string())
+            }
+            Statement::ShowTables { .. } => {
+                Err("not implemented: Statement::ShowTables".to_string())
+            }
+            Statement::ShowCollation { .. } => {
+                Err("not implemented: Statement::ShowCollation".to_string())
+            }
+            Statement::Use { .. } => Err("not implemented: Statement::Use".to_string()),
+            Statement::StartTransaction { .. } => {
+                Err("not implemented: Statement::StartTransaction".to_string())
+            }
+            Statement::SetTransaction { .. } => {
+                Err("not implemented: Statement::SetTransaction".to_string())
+            }
+            Statement::Comment { .. } => Err("not implemented: Statement::Comment".to_string()),
+            Statement::Commit { .. } => Err("not implemented: Statement::Commit".to_string()),
+            Statement::Rollback { .. } => Err("not implemented: Statement::Rollback".to_string()),
+            Statement::CreateSchema { .. } => {
+                Err("not implemented: Statement::CreateSchema".to_string())
+            }
+            Statement::CreateDatabase { .. } => {
+                Err("not implemented: Statement::CreateDatabase".to_string())
+            }
+            Statement::CreateFunction { .. } => {
+                Err("not implemented: Statement::CreateFunction".to_string())
+            }
+            Statement::CreateProcedure { .. } => {
+                Err("not implemented: Statement::CreateProcedure".to_string())
+            }
+            Statement::CreateMacro { .. } => {
+                Err("not implemented: Statement::CreateMacro".to_string())
+            }
+            Statement::CreateStage { .. } => {
+                Err("not implemented: Statement::CreateStage".to_string())
+            }
+            Statement::Assert { .. } => Err("not implemented: Statement::Assert".to_string()),
+            Statement::Grant { .. } => Err("not implemented: Statement::Grant".to_string()),
+            Statement::Revoke { .. } => Err("not implemented: Statement::Revoke".to_string()),
+            Statement::Deallocate { .. } => {
+                Err("not implemented: Statement::Deallocate".to_string())
+            }
+            Statement::Execute { .. } => Err("not implemented: Statement::Execute".to_string()),
+            Statement::Prepare { .. } => Err("not implemented: Statement::Prepare".to_string()),
+            Statement::Kill { .. } => Err("not implemented: Statement::Kill".to_string()),
+            Statement::ExplainTable { .. } => {
+                Err("not implemented: Statement::ExplainTable".to_string())
+            }
+            Statement::Explain { .. } => Err("not implemented: Statement::Explain".to_string()),
+            Statement::Savepoint { .. } => Err("not implemented: Statement::Savepoint".to_string()),
+            Statement::ReleaseSavepoint { .. } => {
+                Err("not implemented: Statement::ReleaseSavepoint".to_string())
+            }
+            Statement::Merge { .. } => Err("not implemented: Statement::Merge".to_string()),
+            Statement::Cache { .. } => Err("not implemented: Statement::Cache".to_string()),
+            Statement::UNCache { .. } => Err("not implemented: Statement::UNCache".to_string()),
+            Statement::CreateSequence { .. } => {
+                Err("not implemented: Statement::CreateSequence".to_string())
+            }
+            Statement::CreateType { .. } => {
+                Err("not implemented: Statement::CreateType".to_string())
+            }
+            Statement::Pragma { .. } => Err("not implemented: Statement::Pragma".to_string()),
+            Statement::LockTables { .. } => {
+                Err("not implemented: Statement::LockTables".to_string())
+            }
+            Statement::UnlockTables => Err("not implemented: Statement::UnlockTables".to_string()),
+            Statement::Directory { .. } => Err("not implemented: Statement::Directory".to_string()),
+            Statement::Call(_) => Err("not implemented: Statement::Call".to_string()),
+            Statement::Copy { .. } => Err("not implemented: Statement::Copy".to_string()),
+            Statement::CopyIntoSnowflake { .. } => {
+                Err("not implemented: Statement::CopyIntoSnowflake".to_string())
+            }
+            Statement::Close { .. } => Err("not implemented: Statement::Close".to_string()),
+            Statement::Delete { .. } => Err("not implemented: Statement::Delete".to_string()),
+            Statement::CreateView { .. } => {
+                Err("not implemented: Statement::CreateView".to_string())
+            }
+            Statement::CreateVirtualTable { .. } => {
+                Err("not implemented: Statement::CreateVirtualTable".to_string())
+            }
+            Statement::CreateRole { .. } => {
+                Err("not implemented: Statement::CreateRole".to_string())
+            }
+        }
+    }
 
-    Ok(TranslatedQuery {
-        databases: database_names,
-        query: new_statements,
-    })
-}
+    fn traverse(&mut self, ast: Vec<Statement>) -> Result<Vec<Statement>, String> {
+        ast.into_iter()
+            .map(|s| self.traverse_statement(s))
+            .collect()
+    }
 
-fn translate_drop(
-    statement: &Statement,
-    database_names: &mut HashMap<String, String>,
-) -> Result<Statement, String> {
-    match statement {
-        Statement::Drop {
-            cascade,
-            if_exists,
-            names,
-            object_type,
-            purge,
-            restrict,
-            temporary,
-        } => {
-            match object_type {
-                ObjectType::Table => {}
-                ObjectType::View => Err("not implemented: Statement::Drop::View".to_string())?,
-                ObjectType::Index => Err("not implemented: Statement::Drop::Index".to_string())?,
-                ObjectType::Schema => Err("not implemented: Statement::Drop::Schema".to_string())?,
-                ObjectType::Role => Err("not implemented: Statement::Drop::Role".to_string())?,
-                ObjectType::Sequence => {
-                    Err("not implemented: Statement::Drop::Sequence".to_string())?
-                }
-                ObjectType::Stage => Err("not implemented: Statement::Drop::Stage".to_string())?,
-            };
+    fn traverse_drop(&mut self, drop: &Statement) -> Result<Statement, String> {
+        match drop {
+            Statement::Drop {
+                cascade,
+                if_exists,
+                names,
+                object_type,
+                purge,
+                restrict,
+                temporary,
+            } => {
+                match object_type {
+                    ObjectType::Table => {}
+                    ObjectType::View => Err("not implemented: Statement::Drop::View".to_string())?,
+                    ObjectType::Index => {
+                        Err("not implemented: Statement::Drop::Index".to_string())?
+                    }
+                    ObjectType::Schema => {
+                        Err("not implemented: Statement::Drop::Schema".to_string())?
+                    }
+                    ObjectType::Role => Err("not implemented: Statement::Drop::Role".to_string())?,
+                    ObjectType::Sequence => {
+                        Err("not implemented: Statement::Drop::Sequence".to_string())?
+                    }
+                    ObjectType::Stage => {
+                        Err("not implemented: Statement::Drop::Stage".to_string())?
+                    }
+                };
 
-            if *cascade {
-                Err("not implemented: Statement::Drop::cascade".to_string())?;
-            };
+                if *cascade {
+                    Err("not implemented: Statement::Drop::cascade".to_string())?;
+                };
 
-            if *purge {
-                Err("not implemented: Statement::Drop::purge".to_string())?;
-            };
+                if *purge {
+                    Err("not implemented: Statement::Drop::purge".to_string())?;
+                };
 
-            if *restrict {
-                Err("not implemented: Statement::Drop::restrict".to_string())?;
-            };
+                if *restrict {
+                    Err("not implemented: Statement::Drop::restrict".to_string())?;
+                };
 
-            if *temporary {
-                Err("not implemented: Statement::Drop::temporary".to_string())?;
-            };
+                if *temporary {
+                    Err("not implemented: Statement::Drop::temporary".to_string())?;
+                };
 
-            let new_names = names
-                .iter()
-                .map(|name| {
-                    let db_reference = convert_path_to_database(name, database_names)?;
-                    Ok(ObjectName(get_qualified_values_table_identifiers(
-                        &db_reference,
-                    )))
+                let new_names = names
+                    .iter()
+                    .map(|name| {
+                        let db_reference =
+                            convert_path_to_database(name, &mut self.database_names)?;
+                        Ok(ObjectName(get_qualified_values_table_identifiers(
+                            &db_reference,
+                        )))
+                    })
+                    .collect::<Result<Vec<_>, String>>()?;
+
+                Ok(Statement::Drop {
+                    cascade: false,
+                    if_exists: *if_exists,
+                    names: new_names,
+                    object_type: ObjectType::Table,
+                    purge: false,
+                    restrict: false,
+                    temporary: false,
                 })
-                .collect::<Result<Vec<_>, String>>()?;
-
-            Ok(Statement::Drop {
-                cascade: false,
-                if_exists: *if_exists,
-                names: new_names,
-                object_type: ObjectType::Table,
-                purge: false,
-                restrict: false,
-                temporary: false,
-            })
-        }
-        _ => {
-            unreachable!("Expected a Drop statement")
+            }
+            _ => {
+                unreachable!("Expected a Drop statement")
+            }
         }
     }
-}
 
-fn translate_update(
-    statement: &Statement,
-    databases: &mut DatabaseNamesByPath,
-) -> Result<Statement, String> {
-    match statement {
-        Statement::Update {
-            assignments,
-            from,
-            returning,
-            selection,
-            table,
-        } => {
-            if returning.is_some() {
-                return Err("not implemented: Statement::Update::returning".to_string());
+    fn traverse_update(&mut self, update: &Statement) -> Result<Statement, String> {
+        match update {
+            Statement::Update {
+                assignments,
+                from,
+                returning,
+                selection,
+                table,
+            } => {
+                if returning.is_some() {
+                    return Err("not implemented: Statement::Update::returning".to_string());
+                }
+
+                let mut scope = Scope {
+                    referencable_tables: HashMap::new(),
+                };
+
+                let new_table = self.traverse_table_with_joins(table, &vec![], &mut scope)?;
+
+                let new_from = from
+                    .as_ref()
+                    .map(|f| self.traverse_table_with_joins(f, &vec![], &mut scope))
+                    .transpose()?;
+
+                let scope = scope;
+                let scopes = vec![&scope];
+
+                let new_assignments = assignments
+                    .iter()
+                    .map(|assignment| self.traverse_assignment(assignment, &scopes))
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                let new_selection = selection
+                    .as_ref()
+                    .map(|s| self.traverse_expr(s, &scopes))
+                    .transpose()?;
+
+                Ok(Statement::Update {
+                    assignments: new_assignments,
+                    from: new_from,
+                    selection: new_selection,
+                    table: new_table,
+
+                    returning: None,
+                })
+            }
+            _ => {
+                unreachable!("Expected an Update statement");
+            }
+        }
+    }
+
+    fn traverse_assignment(
+        &mut self,
+        Assignment { id, value }: &Assignment,
+        scopes: &Scopes,
+    ) -> Result<Assignment, String> {
+        let new_value = self.traverse_expr(value, scopes)?;
+
+        extract_unary_identifier(id, "column")?;
+
+        Ok(Assignment {
+            id: id.clone(),
+            value: new_value,
+        })
+    }
+
+    fn traverse_create_table(&mut self, create_table: &Statement) -> Result<Statement, String> {
+        if let CreateTable {
+            if_not_exists,
+            name,
+            columns,
+            // TODO: handle other fields, if only by throwing an error for unhandled syntax.
+            ..
+        } = create_table
+        {
+            let db_reference = convert_path_to_database(name, &mut self.database_names)?;
+
+            Ok(CreateTable {
+                if_not_exists: *if_not_exists,
+                name: ObjectName(get_qualified_values_table_identifiers(&db_reference)),
+                columns: columns.clone(),
+                or_replace: false,
+                temporary: false,
+                external: false,
+                global: None,
+                transient: false,
+                constraints: vec![],
+                hive_distribution: HiveDistributionStyle::NONE,
+                hive_formats: None,
+                table_properties: vec![],
+                with_options: vec![],
+                file_format: None,
+                location: None,
+                query: None,
+                without_rowid: false,
+                like: None,
+                clone: None,
+                engine: None,
+                comment: None,
+                auto_increment_offset: None,
+                default_charset: None,
+                collation: None,
+                on_commit: None,
+                on_cluster: None,
+                order_by: None,
+                partition_by: None,
+                cluster_by: None,
+                options: None,
+                strict: false,
+            })
+        } else {
+            unreachable!("Expected a CreateTable statement");
+        }
+    }
+
+    fn traverse_create_index(&mut self, create_index: &Statement) -> Result<Statement, String> {
+        match create_index {
+            CreateIndex { name: None, .. } => Err("Index name is required")?,
+            CreateIndex {
+                columns,
+                name: Some(ObjectName(name_identifiers)),
+                table_name,
+                unique,
+                if_not_exists,
+                nulls_distinct,
+                // TODO: handle other fields, if only by throwing an error for unhandled syntax.
+                ..
+            } => {
+                let index_name = extract_unary_identifier(name_identifiers, "index")?;
+
+                let translated_db_name =
+                    convert_path_to_database(table_name, &mut self.database_names)?;
+
+                // TODO: use translate_expr instead
+                for OrderByExpr { expr, .. } in columns {
+                    validate_expr(expr)?;
+                }
+
+                Ok(CreateIndex {
+                    columns: columns.clone(),
+                    if_not_exists: *if_not_exists,
+                    name: Some(ObjectName(vec![
+                        Ident::new(translated_db_name),
+                        Ident::new(format!("{}{}", _VALUES_TABLE_INDEX_PREFIX, index_name)),
+                    ])),
+                    nulls_distinct: *nulls_distinct,
+                    table_name: ObjectName(vec![Ident::new(VALUES_TABLE_NAME)]),
+                    unique: *unique,
+
+                    // Not handled
+                    concurrently: false,
+                    include: vec![],
+                    predicate: None,
+                    using: None,
+                })
+            }
+            _ => {
+                unreachable!("Expected a CreateIndex statement");
+            }
+        }
+    }
+
+    fn traverse_insert(&mut self, insert: &Statement) -> Result<Statement, String> {
+        match insert {
+            Insert {
+                columns,
+                table_name,
+                table_alias,
+                ignore,
+                into,
+                or,
+                overwrite,
+                replace_into,
+                table,
+                source,
+                after_columns,
+                on,
+                partitioned,
+                priority,
+                returning,
+            } => {
+                if !after_columns.is_empty() {
+                    return Err("not implemented: Insert::after_columns".to_string());
+                }
+
+                if partitioned.is_some() {
+                    return Err("not implemented: Insert::partitioned".to_string());
+                }
+
+                if priority.is_some() {
+                    return Err("not implemented: Insert::priority".to_string());
+                }
+
+                if returning.is_some() {
+                    return Err("not implemented: Insert::returning".to_string());
+                }
+
+                let translated_db_name =
+                    convert_path_to_database(table_name, &mut self.database_names)?;
+
+                let new_source = source
+                    .as_ref()
+                    .map(|s| self.traverse_ast_query(s))
+                    .transpose()?;
+
+                let new_on = self.traverse_on_insert(on)?;
+
+                Ok(Insert {
+                    after_columns: vec![],
+                    columns: columns.clone(),
+                    ignore: *ignore,
+                    into: *into,
+                    on: new_on,
+                    or: *or,
+                    overwrite: *overwrite,
+                    replace_into: *replace_into,
+                    source: new_source,
+                    table_alias: table_alias.clone(),
+                    table_name: ObjectName(get_qualified_values_table_identifiers(
+                        &translated_db_name,
+                    )),
+                    table: *table,
+
+                    partitioned: None,
+                    priority: None,
+                    returning: None,
+                })
+            }
+            _ => {
+                unreachable!("Expected an Insert statement");
+            }
+        }
+    }
+
+    fn traverse_on_insert(
+        &mut self,
+        on_insert: &Option<OnInsert>,
+    ) -> Result<Option<OnInsert>, String> {
+        match on_insert {
+            Some(OnInsert::OnConflict(on_conflict)) => self.traverse_on_conflict(on_conflict),
+            None => Ok(None),
+
+            Some(OnInsert::DuplicateKeyUpdate(..)) => {
+                Err("not implemented: OnInsert::DuplicateKeyUpdate".to_string())
             }
 
-            let mut scope = Scope {
-                referencable_tables: HashMap::new(),
-            };
-
-            let new_table = translate_table_with_joins(table, &vec![], databases, &mut scope)?;
-
-            let new_from = from
-                .as_ref()
-                .map(|f| translate_table_with_joins(f, &vec![], databases, &mut scope))
-                .transpose()?;
-
-            let scope = scope;
-            let scopes = vec![&scope];
-
-            let new_assignments = assignments
-                .iter()
-                .map(|assignment| translate_assignment(assignment, databases, &scopes))
-                .collect::<Result<Vec<_>, _>>()?;
-
-            let new_selection = selection
-                .as_ref()
-                .map(|s| translate_expr(s, databases, &scopes))
-                .transpose()?;
-
-            Ok(Statement::Update {
-                assignments: new_assignments,
-                from: new_from,
-                selection: new_selection,
-                table: new_table,
-
-                returning: None,
-            })
-        }
-        _ => {
-            unreachable!("Expected an Update statement");
+            &Some(_) => Err("Unrecognized OnInsert variant".to_string()),
         }
     }
-}
 
-fn translate_assignment(
-    Assignment { id, value }: &Assignment,
-    databases: &mut DatabaseNamesByPath,
-    scopes: &Scopes,
-) -> Result<Assignment, String> {
-    let new_value = translate_expr(value, databases, scopes)?;
+    fn traverse_on_conflict(
+        &mut self,
+        OnConflict {
+            action,
+            conflict_target,
+        }: &OnConflict,
+    ) -> Result<Option<OnInsert>, String> {
+        if conflict_target.is_some() {
+            return Err("not implemented: OnConflict::conflict_target".to_string());
+        }
 
-    extract_unary_identifier(id, "column")?;
+        match action {
+            OnConflictAction::DoNothing => Ok(Some(OnInsert::OnConflict(OnConflict {
+                action: OnConflictAction::DoNothing,
+                conflict_target: None,
+            }))),
 
-    Ok(Assignment {
-        id: id.clone(),
-        value: new_value,
-    })
+            OnConflictAction::DoUpdate(_) => {
+                Err("not implemented: OnConflictAction::DoUpdate".to_string())
+            }
+        }
+    }
+
+    fn traverse_ast_query(&mut self, query: &Box<ast::Query>) -> Result<Box<ast::Query>, String> {
+        match query.as_ref() {
+            ast::Query {
+                body,
+                fetch,
+                for_clause,
+                limit,
+                limit_by,
+                locks,
+                offset,
+                order_by,
+                with,
+            } => {
+                if fetch.is_some() {
+                    return Err("not implemented: ast::Query::fetch".to_string());
+                }
+
+                if for_clause.is_some() {
+                    return Err("not implemented: ast::Query::for_clause".to_string());
+                }
+
+                if !limit_by.is_empty() {
+                    return Err("not implemented: ast::Query::limit_by".to_string());
+                }
+
+                if !locks.is_empty() {
+                    return Err("not implemented: ast::Query::locks".to_string());
+                }
+
+                if with.is_some() {
+                    return Err("not implemented: ast::Query::with".to_string());
+                }
+
+                let mut scopes = vec![];
+                let (new_body, new_scope) = self.traverse_set_expr(body, &scopes)?;
+                if let Some(s) = &new_scope {
+                    scopes.push(s);
+                };
+
+                let new_order_by = order_by
+                    .iter()
+                    .map(|expr| self.traverse_order_by_expr(expr, &scopes))
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                let new_offset = offset
+                    .as_ref()
+                    .map(|o| self.traverse_offset(o, &scopes))
+                    .transpose()?;
+
+                Ok(Box::new(ast::Query {
+                    body: Box::new(new_body),
+                    limit: limit
+                        .as_ref()
+                        .map(|l| self.traverse_expr(l, &scopes))
+                        .transpose()?,
+                    order_by: new_order_by,
+                    offset: new_offset,
+
+                    fetch: None,
+                    for_clause: None,
+                    limit_by: vec![],
+                    locks: vec![],
+                    with: None,
+                }))
+            }
+        }
+    }
+
+    fn traverse_offset(
+        &mut self,
+        Offset { value, rows }: &Offset,
+        scopes: &Scopes,
+    ) -> Result<Offset, String> {
+        Ok(Offset {
+            rows: *rows,
+            value: self.traverse_expr(value, scopes)?,
+        })
+    }
+
+    fn traverse_order_by_expr(
+        &mut self,
+        expr: &OrderByExpr,
+        scopes: &Scopes,
+    ) -> Result<OrderByExpr, String> {
+        match expr {
+            OrderByExpr {
+                expr,
+                asc,
+                nulls_first,
+            } => {
+                let new_expr = self.traverse_expr(expr, scopes)?;
+
+                Ok(OrderByExpr {
+                    expr: new_expr,
+                    asc: *asc,
+                    nulls_first: *nulls_first,
+                })
+            }
+        }
+    }
+
+    fn traverse_set_expr(
+        &mut self,
+        body: &SetExpr,
+        scopes: &Scopes,
+    ) -> Result<(SetExpr, Option<Scope>), String> {
+        match body {
+            SetExpr::Values(Values { explicit_row, rows }) => Ok((
+                SetExpr::Values(Values {
+                    explicit_row: *explicit_row,
+                    rows: rows
+                        .into_iter()
+                        .map(|row| {
+                            row.into_iter()
+                                .map(|expr| self.traverse_expr(expr, scopes))
+                                .collect::<Result<Vec<_>, _>>()
+                                .map_err(|e| e.to_string())
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                }),
+                None,
+            )),
+            SetExpr::Select(select) => {
+                let (new_select, new_scope) = self.traverse_select(select, scopes)?;
+                Ok((SetExpr::Select(new_select), Some(new_scope)))
+            }
+            SetExpr::SetOperation { .. } => self
+                .traverse_set_operation(body, scopes)
+                .map(|op| (op, None)),
+
+            SetExpr::Query(_) => Err("not implemented: SetExpr::Query".to_string()),
+            SetExpr::Insert(_) => Err("not implemented: SetExpr::Insert".to_string()),
+            SetExpr::Update(_) => Err("not implemented: SetExpr::Update".to_string()),
+            SetExpr::Table(_) => Err("not implemented: SetExpr::Table".to_string()),
+        }
+    }
+
+    fn traverse_set_operation(
+        &mut self,
+        body: &SetExpr,
+        scopes: &Scopes,
+    ) -> Result<SetExpr, String> {
+        match body {
+            SetExpr::SetOperation {
+                left,
+                op,
+                right,
+                set_quantifier,
+            } => {
+                let (new_left, _) = self.traverse_set_expr(left, scopes)?;
+                let (new_right, _) = self.traverse_set_expr(right, scopes)?;
+
+                Ok(SetExpr::SetOperation {
+                    left: Box::new(new_left),
+                    op: *op,
+                    right: Box::new(new_right),
+                    set_quantifier: *set_quantifier,
+                })
+            }
+            _ => {
+                unreachable!("Expected a SetOperation SetExpr");
+            }
+        }
+    }
+
+    fn traverse_table_with_joins(
+        &mut self,
+        TableWithJoins { relation, joins }: &TableWithJoins,
+        upper_scopes: &Scopes,
+        current_scope: &mut Scope,
+    ) -> Result<TableWithJoins, String> {
+        let new_relation =
+            self.traverse_table_factor(relation, &mut current_scope.referencable_tables)?;
+
+        let new_join = joins
+            .iter()
+            .map(|join| self.traverse_join(join, upper_scopes, current_scope))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(TableWithJoins {
+            relation: new_relation,
+            joins: new_join,
+        })
+    }
+
+    fn traverse_join(
+        &mut self,
+        join: &Join,
+        upper_scopes: &Scopes,
+        current_scope: &mut Scope,
+    ) -> Result<Join, String> {
+        match join {
+            Join {
+                join_operator,
+                relation,
+            } => {
+                let new_relation =
+                    self.traverse_table_factor(relation, &mut current_scope.referencable_tables)?;
+
+                let total_scopes = {
+                    let mut s = upper_scopes.clone();
+                    s.push(current_scope);
+                    s
+                };
+
+                let new_join_operator =
+                    self.traverse_join_operator(join_operator, &total_scopes)?;
+
+                Ok(Join {
+                    join_operator: new_join_operator,
+                    relation: new_relation,
+                })
+            }
+        }
+    }
+
+    fn traverse_join_operator(
+        &mut self,
+        join_operator: &JoinOperator,
+        scopes: &Scopes,
+    ) -> Result<JoinOperator, String> {
+        match join_operator {
+            JoinOperator::Inner(constraint) => {
+                let new_constraint = self.traverse_join_constraint(constraint, scopes)?;
+                Ok(JoinOperator::Inner(new_constraint))
+            }
+            JoinOperator::LeftOuter(constraint) => {
+                let new_constraint = self.traverse_join_constraint(constraint, scopes)?;
+                Ok(JoinOperator::LeftOuter(new_constraint))
+            }
+            JoinOperator::RightOuter(constraint) => {
+                let new_constraint = self.traverse_join_constraint(constraint, scopes)?;
+                Ok(JoinOperator::RightOuter(new_constraint))
+            }
+            JoinOperator::FullOuter(constraint) => {
+                let new_constraint = self.traverse_join_constraint(constraint, scopes)?;
+                Ok(JoinOperator::FullOuter(new_constraint))
+            }
+            JoinOperator::CrossJoin => Ok(JoinOperator::CrossJoin),
+            JoinOperator::LeftSemi(constraint) => {
+                let new_constraint = self.traverse_join_constraint(constraint, scopes)?;
+                Ok(JoinOperator::LeftSemi(new_constraint))
+            }
+            JoinOperator::RightSemi(constraint) => {
+                let new_constraint = self.traverse_join_constraint(constraint, scopes)?;
+                Ok(JoinOperator::RightSemi(new_constraint))
+            }
+            JoinOperator::LeftAnti(constraint) => {
+                let new_constraint = self.traverse_join_constraint(constraint, scopes)?;
+                Ok(JoinOperator::LeftAnti(new_constraint))
+            }
+            JoinOperator::RightAnti(constraint) => {
+                let new_constraint = self.traverse_join_constraint(constraint, scopes)?;
+                Ok(JoinOperator::RightAnti(new_constraint))
+            }
+            JoinOperator::CrossApply => Ok(JoinOperator::CrossApply),
+            JoinOperator::OuterApply => Ok(JoinOperator::OuterApply),
+        }
+    }
+
+    fn traverse_join_constraint(
+        &mut self,
+        constraint: &JoinConstraint,
+        scopes: &Scopes,
+    ) -> Result<JoinConstraint, String> {
+        match constraint {
+            JoinConstraint::On(expr) => {
+                let new_expr = self.traverse_expr(expr, scopes)?;
+                Ok(JoinConstraint::On(new_expr))
+            }
+            JoinConstraint::Natural => Ok(JoinConstraint::Natural),
+            JoinConstraint::None => Ok(JoinConstraint::None),
+
+            JoinConstraint::Using(_) => Err("not implemented: JoinConstraint::Using".to_string()),
+        }
+    }
+
+    fn traverse_table_factor(
+        &mut self,
+        relation: &TableFactor,
+        referencable_tables: &mut ReferencableTables,
+    ) -> Result<TableFactor, String> {
+        match relation {
+            TableFactor::Table {
+                alias,
+                args,
+                name: table_name,
+                partitions,
+                version,
+                with_hints,
+            } => {
+                if args.is_some() {
+                    return Err("not implemented: TableFactor::Table::args".to_string());
+                }
+
+                if !partitions.is_empty() {
+                    return Err("not implemented: TableFactor::Table::partitions".to_string());
+                }
+
+                if version.is_some() {
+                    return Err("not implemented: TableFactor::Table::version".to_string());
+                }
+
+                if !with_hints.is_empty() {
+                    return Err("not implemented: TableFactor::Table::with_hints".to_string());
+                }
+
+                let db_reference = convert_path_to_database(table_name, &mut self.database_names)?;
+
+                add_to_referencable_tables(
+                    &Some(&table_name),
+                    alias,
+                    &mut self.database_names,
+                    referencable_tables,
+                )?;
+
+                Ok(TableFactor::Table {
+                    alias: alias.clone(),
+                    name: ObjectName(get_qualified_values_table_identifiers(&db_reference)),
+
+                    args: None,
+                    partitions: vec![],
+                    version: None,
+                    with_hints: vec![],
+                })
+            }
+            TableFactor::Derived { .. } => {
+                self.traverse_table_factor_derived(relation, referencable_tables)
+            }
+
+            TableFactor::TableFunction { .. } => {
+                Err("not implemented: TableFactor::TableFunction".to_string())
+            }
+            TableFactor::Function { .. } => {
+                Err("not implemented: TableFactor::Function".to_string())
+            }
+            TableFactor::UNNEST { .. } => Err("not implemented: TableFactor::UNNEST".to_string()),
+            TableFactor::JsonTable { .. } => {
+                Err("not implemented: TableFactor::JsonTable".to_string())
+            }
+            TableFactor::NestedJoin { .. } => {
+                Err("not implemented: TableFactor::NestedJoin".to_string())
+            }
+            TableFactor::Pivot { .. } => Err("not implemented: TableFactor::Pivot".to_string()),
+            TableFactor::Unpivot { .. } => Err("not implemented: TableFactor::Unpivot".to_string()),
+        }
+    }
+
+    fn traverse_table_factor_derived(
+        &mut self,
+        relation: &TableFactor,
+        referencable_tables: &mut ReferencableTables,
+    ) -> Result<TableFactor, String> {
+        match relation {
+            TableFactor::Derived {
+                lateral,
+                subquery,
+                alias,
+            } => {
+                let new_subquery = self.traverse_ast_query(subquery)?;
+
+                add_to_referencable_tables(
+                    &None,
+                    alias,
+                    &mut self.database_names,
+                    referencable_tables,
+                )?;
+
+                Ok(TableFactor::Derived {
+                    lateral: *lateral,
+                    subquery: new_subquery,
+                    alias: alias.clone(),
+                })
+            }
+            _ => {
+                unreachable!("Expected a Derived TableFactor");
+            }
+        }
+    }
+
+    fn traverse_select_tables(
+        &mut self,
+        tables: &Vec<TableWithJoins>,
+        scopes: &Scopes,
+    ) -> Result<(Vec<TableWithJoins>, Scope), String> {
+        let referencable_tables: ReferencableTables = HashMap::new();
+
+        let mut new_scope = Scope {
+            referencable_tables,
+        };
+
+        let new_tables = tables
+            .iter()
+            .map(|t| self.traverse_table_with_joins(t, scopes, &mut new_scope))
+            .collect::<Result<Vec<TableWithJoins>, String>>()?;
+
+        Ok((new_tables, new_scope))
+    }
+
+    fn traverse_select(
+        &mut self,
+        select: &Box<Select>,
+        scopes: &Scopes,
+    ) -> Result<(Box<Select>, Scope), String> {
+        match select.as_ref() {
+            Select {
+                cluster_by,
+                distinct,
+                distribute_by,
+                from,
+                group_by,
+                having,
+                into,
+                lateral_views,
+                named_window,
+                projection,
+                qualify,
+                selection,
+                sort_by,
+                top,
+            } => {
+                if !cluster_by.is_empty() {
+                    return Err("not implemented: Select::cluster_by".to_string());
+                }
+
+                if distinct.is_some() {
+                    return Err("not implemented: Select::distinct".to_string());
+                }
+
+                if !distribute_by.is_empty() {
+                    return Err("not implemented: Select::distribute_by".to_string());
+                }
+
+                if having.is_some() {
+                    return Err("not implemented: Select::having".to_string());
+                }
+
+                if into.is_some() {
+                    return Err("not implemented: Select::into".to_string());
+                }
+
+                if !lateral_views.is_empty() {
+                    return Err("not implemented: Select::lateral_views".to_string());
+                }
+
+                if !named_window.is_empty() {
+                    return Err("not implemented: Select::named_window".to_string());
+                }
+
+                if qualify.is_some() {
+                    return Err("not implemented: Select::qualify".to_string());
+                }
+
+                if !sort_by.is_empty() {
+                    // TODO: Just a thought. If this is ever released to the public, maybe make these error messages friendlier and encourage/facilitate contribution
+                    return Err("not implemented: Select::sort_by".to_string());
+                }
+
+                if top.is_some() {
+                    return Err("not implemented: Select::top".to_string());
+                }
+
+                let (new_from, new_scope) = self.traverse_select_tables(from, scopes)?;
+
+                let scopes: Scopes = {
+                    let mut new_scopes = scopes.clone();
+                    new_scopes.push(&new_scope);
+                    new_scopes
+                };
+
+                let new_projection = projection
+                    .iter()
+                    .map(|item| self.traverse_select_item(item, &scopes))
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                let new_selection = selection
+                    .as_ref()
+                    .map(|expr| self.traverse_expr(expr, &scopes))
+                    .transpose()?;
+
+                let new_group_by = match group_by {
+                    GroupByExpr::Expressions(expressions) => {
+                        let new_expressions = expressions
+                            .iter()
+                            .map(|expr| self.traverse_expr(expr, &scopes))
+                            .collect::<Result<Vec<_>, _>>()?;
+
+                        GroupByExpr::Expressions(new_expressions)
+                    }
+                    GroupByExpr::All => return Err("not implemented: GroupByExpr::All".to_string()),
+                };
+
+                Ok((
+                    Box::new(Select {
+                        from: new_from,
+                        group_by: new_group_by,
+                        projection: new_projection,
+                        selection: new_selection,
+
+                        cluster_by: vec![],
+                        distinct: None,
+                        distribute_by: vec![],
+                        having: None,
+                        into: None,
+                        lateral_views: vec![],
+                        named_window: vec![],
+                        qualify: None,
+                        sort_by: vec![],
+                        top: None,
+                    }),
+                    new_scope,
+                ))
+            }
+        }
+    }
+
+    fn traverse_select_item(
+        &mut self,
+        select_item: &SelectItem,
+        scopes: &Scopes,
+    ) -> Result<SelectItem, String> {
+        match select_item {
+            SelectItem::UnnamedExpr(expr) => {
+                Ok(SelectItem::UnnamedExpr(self.traverse_expr(expr, scopes)?))
+            }
+            SelectItem::ExprWithAlias { expr, alias } => {
+                let new_expr = self.traverse_expr(expr, scopes)?;
+
+                Ok(SelectItem::ExprWithAlias {
+                    expr: new_expr,
+                    alias: alias.clone(),
+                })
+            }
+            SelectItem::Wildcard(wildcard_options) => {
+                let new_wildcard_options =
+                    self.traverse_wildcard_additional_options(wildcard_options)?;
+                Ok(SelectItem::Wildcard(new_wildcard_options))
+            }
+
+            SelectItem::QualifiedWildcard(_, _) => {
+                Err("not implemented: SelectItem::QualifiedWildcard".to_string())
+            }
+        }
+    }
+
+    fn traverse_wildcard_additional_options(
+        &mut self,
+        WildcardAdditionalOptions {
+            opt_except,
+            opt_exclude,
+            opt_rename,
+            opt_replace,
+        }: &WildcardAdditionalOptions,
+    ) -> Result<WildcardAdditionalOptions, String> {
+        if opt_except.is_some() {
+            return Err("not implemented: WildcardAdditionalOptions::opt_except".to_string());
+        }
+
+        if opt_exclude.is_some() {
+            return Err("not implemented: WildcardAdditionalOptions::opt_exclude".to_string());
+        }
+
+        if opt_rename.is_some() {
+            return Err("not implemented: WildcardAdditionalOptions::opt_rename".to_string());
+        }
+
+        if opt_replace.is_some() {
+            return Err("not implemented: WildcardAdditionalOptions::opt_replace".to_string());
+        }
+
+        Ok(WildcardAdditionalOptions {
+            opt_except: None,
+            opt_exclude: None,
+            opt_rename: None,
+            opt_replace: None,
+        })
+    }
+
+    fn traverse_expr(&mut self, expr: &Expr, scopes: &Scopes) -> Result<Expr, String> {
+        match expr {
+            Expr::Value(value) => Ok(Expr::Value(self.traverse_value(value)?)),
+            Expr::Function(func) => Ok(Expr::Function(self.traverse_function(func, scopes)?)),
+            Expr::CompoundIdentifier(identifiers) => {
+                let (table_reference, column_name) =
+                    extract_binary_identifiers(identifiers, "expression")?;
+
+                let table_replacement_identifiers =
+                    get_replacement_identifiers_for_table(scopes, table_reference)?;
+
+                let mut new_identifiers = table_replacement_identifiers.clone();
+                new_identifiers.push(Ident::new(&column_name));
+
+                Ok(Expr::CompoundIdentifier(new_identifiers))
+            }
+            Expr::BinaryOp { left, op, right } => {
+                let new_left = self.traverse_expr(left, scopes)?;
+                let new_right = self.traverse_expr(right, scopes)?;
+                Ok(Expr::BinaryOp {
+                    left: Box::new(new_left),
+                    op: op.clone(),
+                    right: Box::new(new_right),
+                })
+            }
+            Expr::Identifier(_) => Ok(expr.clone()),
+            Expr::InSubquery { .. } => self.traverse_in_subquery(expr, scopes),
+            Expr::IsNull(expr) => Ok(Expr::IsNull(Box::new(self.traverse_expr(expr, scopes)?))),
+            Expr::Nested(nested_expr) => Ok(Expr::Nested(Box::new(
+                self.traverse_expr(nested_expr, scopes)?,
+            ))),
+
+            Expr::JsonAccess { .. } => Err("Unhandled syntax: Expr::JsonAccess".to_string()),
+            Expr::CompositeAccess { .. } => {
+                Err("Unhandled syntax: Expr::CompositeAccess".to_string())
+            }
+            Expr::IsFalse(_) => Err("Unhandled syntax: Expr::IsFalse".to_string()),
+            Expr::IsNotFalse(_) => Err("Unhandled syntax: Expr::IsNotFalse".to_string()),
+            Expr::InList { .. } => Err("Unhandled syntax: Expr::InList".to_string()),
+            Expr::InUnnest { .. } => Err("Unhandled syntax: Expr::InUnnest".to_string()),
+            Expr::Between { .. } => Err("Unhandled syntax: Expr::Between".to_string()),
+            Expr::Like { .. } => Err("Unhandled syntax: Expr::Like".to_string()),
+            Expr::ILike { .. } => Err("Unhandled syntax: Expr::ILike".to_string()),
+            Expr::SimilarTo { .. } => Err("Unhandled syntax: Expr::SimilarTo".to_string()),
+            Expr::RLike { .. } => Err("Unhandled syntax: Expr::RLike".to_string()),
+            Expr::AnyOp { .. } => Err("Unhandled syntax: Expr::AnyOp".to_string()),
+            Expr::AllOp { .. } => Err("Unhandled syntax: Expr::AllOp".to_string()),
+            Expr::UnaryOp { .. } => Err("Unhandled syntax: Expr::UnaryOp".to_string()),
+            Expr::Convert { .. } => Err("Unhandled syntax: Expr::Convert".to_string()),
+            Expr::Cast { .. } => Err("Unhandled syntax: Expr::Cast".to_string()),
+            Expr::TryCast { .. } => Err("Unhandled syntax: Expr::TryCast".to_string()),
+            Expr::SafeCast { .. } => Err("Unhandled syntax: Expr::SafeCast".to_string()),
+            Expr::AtTimeZone { .. } => Err("Unhandled syntax: Expr::AtTimeZone".to_string()),
+            Expr::Extract { .. } => Err("Unhandled syntax: Expr::Extract".to_string()),
+            Expr::Ceil { .. } => Err("Unhandled syntax: Expr::Ceil".to_string()),
+            Expr::Floor { .. } => Err("Unhandled syntax: Expr::Floor".to_string()),
+            Expr::Position { .. } => Err("Unhandled syntax: Expr::Position".to_string()),
+            Expr::Substring { .. } => Err("Unhandled syntax: Expr::Substring".to_string()),
+            Expr::IsTrue(_) => Err("Unhandled syntax: Expr::IsTrue".to_string()),
+            Expr::IsNotTrue(_) => Err("Unhandled syntax: Expr::IsNotTrue".to_string()),
+            Expr::IsNotNull(_) => Err("Unhandled syntax: Expr::IsNotNull".to_string()),
+            Expr::IsUnknown(_) => Err("Unhandled syntax: Expr::IsUnknown".to_string()),
+            Expr::IsNotUnknown(_) => Err("Unhandled syntax: Expr::IsNotUnknown".to_string()),
+            Expr::IsDistinctFrom(_, _) => Err("Unhandled syntax: Expr::IsDistinctFrom".to_string()),
+            Expr::IsNotDistinctFrom(_, _) => {
+                Err("Unhandled syntax: Expr::IsNotDistinctFrom".to_string())
+            }
+            Expr::Trim { .. } => Err("Unhandled syntax: Expr::Trim".to_string()),
+            Expr::Overlay { .. } => Err("Unhandled syntax: Expr::Overlay".to_string()),
+            Expr::Collate { .. } => Err("Unhandled syntax: Expr::Collate".to_string()),
+            Expr::IntroducedString { .. } => {
+                Err("Unhandled syntax: Expr::IntroducedString".to_string())
+            }
+            Expr::TypedString { .. } => Err("Unhandled syntax: Expr::TypedString".to_string()),
+            Expr::MapAccess { .. } => Err("Unhandled syntax: Expr::MapAccess".to_string()),
+            Expr::AggregateExpressionWithFilter { .. } => {
+                Err("Unhandled syntax: Expr::AggregateExpressionWithFilter".to_string())
+            }
+            Expr::Case { .. } => Err("Unhandled syntax: Expr::Case".to_string()),
+            Expr::Exists { .. } => Err("Unhandled syntax: Expr::Exists".to_string()),
+            Expr::Subquery(_) => Err("Unhandled syntax: Expr::Subquery".to_string()),
+            Expr::ArraySubquery(_) => Err("Unhandled syntax: Expr::ArraySubquery".to_string()),
+            Expr::ListAgg(_) => Err("Unhandled syntax: Expr::ListAgg".to_string()),
+            Expr::ArrayAgg(_) => Err("Unhandled syntax: Expr::ArrayAgg".to_string()),
+            Expr::GroupingSets(_) => Err("Unhandled syntax: Expr::GroupingSets".to_string()),
+            Expr::Cube(_) => Err("Unhandled syntax: Expr::Cube".to_string()),
+            Expr::Rollup(_) => Err("Unhandled syntax: Expr::Rollup".to_string()),
+            Expr::Tuple(_) => Err("Unhandled syntax: Expr::Tuple".to_string()),
+            Expr::Struct { .. } => Err("Unhandled syntax: Expr::Struct".to_string()),
+            Expr::Named { .. } => Err("Unhandled syntax: Expr::Named".to_string()),
+            Expr::ArrayIndex { .. } => Err("Unhandled syntax: Expr::ArrayIndex".to_string()),
+            Expr::Array(_) => Err("Unhandled syntax: Expr::Array".to_string()),
+            Expr::Interval(_) => Err("Unhandled syntax: Expr::Interval".to_string()),
+            Expr::MatchAgainst { .. } => Err("Unhandled syntax: Expr::MatchAgainst".to_string()),
+            Expr::Wildcard => Err("Unhandled syntax: Expr::Wildcard".to_string()),
+            Expr::QualifiedWildcard(_) => {
+                Err("Unhandled syntax: Expr::QualifiedWildcard".to_string())
+            }
+        }
+    }
+
+    fn traverse_in_subquery(
+        &mut self,
+        in_subquery: &Expr,
+        scopes: &Scopes,
+    ) -> Result<Expr, String> {
+        match in_subquery {
+            Expr::InSubquery {
+                expr,
+                negated,
+                subquery,
+            } => {
+                let new_expr = self.traverse_expr(expr, scopes)?;
+
+                let new_subquery = self.traverse_ast_query(subquery)?;
+
+                Ok(Expr::InSubquery {
+                    expr: Box::new(new_expr),
+                    negated: *negated,
+                    subquery: new_subquery,
+                })
+            }
+            _ => unreachable!("Expected an InSubquery expression"),
+        }
+    }
+
+    fn traverse_function(&mut self, func: &Function, scopes: &Scopes) -> Result<Function, String> {
+        let Function {
+            args,
+            distinct,
+            filter,
+            name,
+            null_treatment,
+            order_by,
+            over,
+            // "special" apparently means the function's parentheses are omitted
+            special,
+        } = func;
+
+        if *distinct {
+            return Err("Unhandled syntax: Function::distinct".to_string());
+        }
+
+        if filter.is_some() {
+            return Err("Unhandled syntax: Function::filter".to_string());
+        }
+
+        if null_treatment.is_some() {
+            return Err("Unhandled syntax: Function::null_treatment".to_string());
+        }
+
+        if !order_by.is_empty() {
+            return Err("Unhandled syntax: Function::order_by".to_string());
+        }
+
+        if over.is_some() {
+            return Err("Unhandled syntax: Function::over".to_string());
+        }
+
+        validate_function_name(name)?;
+
+        Ok(Function {
+            name: name.clone(),
+            special: *special,
+            args: args
+                .into_iter()
+                .map(|arg| self.traverse_function_arg(arg, scopes))
+                .collect::<Result<Vec<_>, _>>()?,
+
+            distinct: false,
+            filter: None,
+            over: None,
+            null_treatment: None,
+            order_by: vec![],
+        })
+    }
+
+    fn traverse_function_arg(
+        &mut self,
+        function_arg: &FunctionArg,
+        scopes: &Scopes,
+    ) -> Result<FunctionArg, String> {
+        match function_arg {
+            FunctionArg::Unnamed(function_arg_expr) => Ok(FunctionArg::Unnamed(
+                self.traverse_function_arg_expr(function_arg_expr, scopes)?,
+            )),
+
+            FunctionArg::Named { .. } => Err("Unhandled syntax: FunctionArg::Named".to_string()),
+        }
+    }
+
+    fn traverse_function_arg_expr(
+        &mut self,
+        function_arg_expr: &FunctionArgExpr,
+        scopes: &Scopes,
+    ) -> Result<FunctionArgExpr, String> {
+        match function_arg_expr {
+            FunctionArgExpr::Expr(expr) => {
+                Ok(FunctionArgExpr::Expr(self.traverse_expr(expr, scopes)?))
+            }
+            FunctionArgExpr::Wildcard => Ok(FunctionArgExpr::Wildcard),
+
+            FunctionArgExpr::QualifiedWildcard(_) => {
+                Err("Unhandled syntax: FunctionArgExpr::QualifiedWildcard".to_string())
+            }
+        }
+    }
+
+    fn traverse_value(&mut self, value: &Value) -> Result<Value, String> {
+        match value {
+            Value::Placeholder(s) => {
+                if s == "?" {
+                    Ok(value.clone())
+                } else {
+                    Err(format!("Unhandled value: Value::Placeholder({})", s))
+                }
+            }
+            Value::SingleQuotedString(_) => Ok(value.clone()),
+            Value::Number(_, _) => Ok(value.clone()),
+            Value::Null => Ok(value.clone()),
+
+            Value::DollarQuotedString(_) => {
+                Err("Unhandled value: Value::DollarQuotedString".to_string())
+            }
+            Value::EscapedStringLiteral(_) => {
+                Err("Unhandled value: Value::EscapedStringLiteral".to_string())
+            }
+            Value::SingleQuotedByteStringLiteral(_) => {
+                Err("Unhandled value: Value::SingleQuotedByteStringLiteral".to_string())
+            }
+            Value::DoubleQuotedByteStringLiteral(_) => {
+                Err("Unhandled value: Value::DoubleQuotedByteStringLiteral".to_string())
+            }
+            Value::RawStringLiteral(_) => {
+                Err("Unhandled value: Value::RawStringLiteral".to_string())
+            }
+            Value::NationalStringLiteral(_) => {
+                Err("Unhandled value: Value::NationalStringLiteral".to_string())
+            }
+            Value::HexStringLiteral(_) => {
+                Err("Unhandled value: Value::HexStringLiteral".to_string())
+            }
+            Value::DoubleQuotedString(_) => {
+                Err("Unhandled value: Value::DoubleQuotedString".to_string())
+            }
+            Value::Boolean(_) => Err("Unhandled value: Value::Boolean".to_string()),
+            Value::UnQuotedString(_) => Err("Unhandled value: Value::UnQuotedString".to_string()),
+        }
+    }
 }
 
 fn translate_sql(query: &str) -> Result<TranslatedQuery<Vec<String>>, String> {
@@ -322,10 +1486,12 @@ fn translate_sql(query: &str) -> Result<TranslatedQuery<Vec<String>>, String> {
 
     // println!("AST: {:#?}", ast);
 
-    let TranslatedQuery { databases, query } = translate_query(ast)?;
+    let mut path_convertor = PathConvertor::new();
+
+    let query = path_convertor.traverse(ast)?;
 
     Ok(TranslatedQuery {
-        databases,
+        databases: path_convertor.database_names,
         query: query.iter().map(|s| s.to_string()).collect(),
     })
 }
@@ -413,58 +1579,6 @@ fn convert_path_to_database(
     Ok(translated_db_name)
 }
 
-fn translate_create_table(
-    create_table: &Statement,
-    databases: &mut DatabaseNamesByPath,
-) -> Result<Statement, String> {
-    if let CreateTable {
-        if_not_exists,
-        name,
-        columns,
-        // TODO: handle other fields, if only by throwing an error for unhandled syntax.
-        ..
-    } = create_table
-    {
-        let db_reference = convert_path_to_database(name, databases)?;
-
-        Ok(CreateTable {
-            if_not_exists: *if_not_exists,
-            name: ObjectName(get_qualified_values_table_identifiers(&db_reference)),
-            columns: columns.clone(),
-            or_replace: false,
-            temporary: false,
-            external: false,
-            global: None,
-            transient: false,
-            constraints: vec![],
-            hive_distribution: HiveDistributionStyle::NONE,
-            hive_formats: None,
-            table_properties: vec![],
-            with_options: vec![],
-            file_format: None,
-            location: None,
-            query: None,
-            without_rowid: false,
-            like: None,
-            clone: None,
-            engine: None,
-            comment: None,
-            auto_increment_offset: None,
-            default_charset: None,
-            collation: None,
-            on_commit: None,
-            on_cluster: None,
-            order_by: None,
-            partition_by: None,
-            cluster_by: None,
-            options: None,
-            strict: false,
-        })
-    } else {
-        unreachable!("Expected a CreateTable statement");
-    }
-}
-
 fn get_qualified_values_table_identifiers(db_reference: &str) -> Vec<Ident> {
     vec![Ident::new(db_reference), Ident::new(VALUES_TABLE_NAME)]
 }
@@ -473,507 +1587,6 @@ fn validate_expr(expr: &Expr) -> Result<(), String> {
     match expr {
         Expr::Identifier(_) => Ok(()),
         _ => Err("not implemented".to_string()),
-    }
-}
-
-fn translate_create_index(
-    statement: &Statement,
-    databases: &mut DatabaseNamesByPath,
-) -> Result<Statement, String> {
-    match statement {
-        CreateIndex { name: None, .. } => Err("Index name is required")?,
-        CreateIndex {
-            columns,
-            name: Some(ObjectName(name_identifiers)),
-            table_name,
-            unique,
-            if_not_exists,
-            nulls_distinct,
-            // TODO: handle other fields, if only by throwing an error for unhandled syntax.
-            ..
-        } => {
-            let index_name = extract_unary_identifier(name_identifiers, "index")?;
-
-            let translated_db_name = convert_path_to_database(table_name, databases)?;
-
-            // TODO: use translate_expr instead
-            for OrderByExpr { expr, .. } in columns {
-                validate_expr(expr)?;
-            }
-
-            Ok(CreateIndex {
-                columns: columns.clone(),
-                if_not_exists: *if_not_exists,
-                name: Some(ObjectName(vec![
-                    Ident::new(translated_db_name),
-                    Ident::new(format!("{}{}", _VALUES_TABLE_INDEX_PREFIX, index_name)),
-                ])),
-                nulls_distinct: *nulls_distinct,
-                table_name: ObjectName(vec![Ident::new(VALUES_TABLE_NAME)]),
-                unique: *unique,
-
-                // Not handled
-                concurrently: false,
-                include: vec![],
-                predicate: None,
-                using: None,
-            })
-        }
-        _ => {
-            unreachable!("Expected a CreateIndex statement");
-        }
-    }
-}
-
-fn translate_insert(
-    statement: &Statement,
-    databases: &mut DatabaseNamesByPath,
-) -> Result<Statement, String> {
-    match statement {
-        Insert {
-            columns,
-            table_name,
-            table_alias,
-            ignore,
-            into,
-            or,
-            overwrite,
-            replace_into,
-            table,
-            source,
-            after_columns,
-            on,
-            partitioned,
-            priority,
-            returning,
-        } => {
-            if !after_columns.is_empty() {
-                return Err("not implemented: Insert::after_columns".to_string());
-            }
-
-            if partitioned.is_some() {
-                return Err("not implemented: Insert::partitioned".to_string());
-            }
-
-            if priority.is_some() {
-                return Err("not implemented: Insert::priority".to_string());
-            }
-
-            if returning.is_some() {
-                return Err("not implemented: Insert::returning".to_string());
-            }
-
-            let translated_db_name = convert_path_to_database(table_name, databases)?;
-
-            let new_source = source
-                .as_ref()
-                .map(|s| translate_ast_query(s, databases))
-                .transpose()?;
-
-            let new_on = translate_on_insert(on)?;
-
-            Ok(Insert {
-                after_columns: vec![],
-                columns: columns.clone(),
-                ignore: *ignore,
-                into: *into,
-                on: new_on,
-                or: *or,
-                overwrite: *overwrite,
-                replace_into: *replace_into,
-                source: new_source,
-                table_alias: table_alias.clone(),
-                table_name: ObjectName(get_qualified_values_table_identifiers(&translated_db_name)),
-                table: *table,
-
-                partitioned: None,
-                priority: None,
-                returning: None,
-            })
-        }
-        _ => {
-            unreachable!("Expected an Insert statement");
-        }
-    }
-}
-
-fn translate_on_insert(on: &Option<OnInsert>) -> Result<Option<OnInsert>, String> {
-    match on {
-        Some(OnInsert::OnConflict(on_conflict)) => translate_on_conflict(on_conflict),
-        None => Ok(None),
-
-        Some(OnInsert::DuplicateKeyUpdate(..)) => {
-            Err("not implemented: OnInsert::DuplicateKeyUpdate".to_string())
-        }
-
-        &Some(_) => Err("Unrecognized OnInsert variant".to_string()),
-    }
-}
-
-fn translate_on_conflict(
-    OnConflict {
-        action,
-        conflict_target,
-    }: &OnConflict,
-) -> Result<Option<OnInsert>, String> {
-    if conflict_target.is_some() {
-        return Err("not implemented: OnConflict::conflict_target".to_string());
-    }
-
-    match action {
-        OnConflictAction::DoNothing => Ok(Some(OnInsert::OnConflict(OnConflict {
-            action: OnConflictAction::DoNothing,
-            conflict_target: None,
-        }))),
-
-        OnConflictAction::DoUpdate(_) => {
-            Err("not implemented: OnConflictAction::DoUpdate".to_string())
-        }
-    }
-}
-
-fn translate_ast_query(
-    source: &Box<ast::Query>,
-    databases: &mut DatabaseNamesByPath,
-) -> Result<Box<ast::Query>, String> {
-    match source.as_ref() {
-        ast::Query {
-            body,
-            fetch,
-            for_clause,
-            limit,
-            limit_by,
-            locks,
-            offset,
-            order_by,
-            with,
-        } => {
-            if fetch.is_some() {
-                return Err("not implemented: ast::Query::fetch".to_string());
-            }
-
-            if for_clause.is_some() {
-                return Err("not implemented: ast::Query::for_clause".to_string());
-            }
-
-            if !limit_by.is_empty() {
-                return Err("not implemented: ast::Query::limit_by".to_string());
-            }
-
-            if !locks.is_empty() {
-                return Err("not implemented: ast::Query::locks".to_string());
-            }
-
-            if with.is_some() {
-                return Err("not implemented: ast::Query::with".to_string());
-            }
-
-            let mut scopes = vec![];
-            let (new_body, new_scope) = translate_set_expr(body, databases, &scopes)?;
-            if let Some(s) = &new_scope {
-                scopes.push(s);
-            };
-
-            let new_order_by = order_by
-                .iter()
-                .map(|expr| translate_order_by_expr(expr, databases, &scopes))
-                .collect::<Result<Vec<_>, _>>()?;
-
-            let new_offset = offset
-                .as_ref()
-                .map(|o| translate_offset(o, databases, &scopes))
-                .transpose()?;
-
-            Ok(Box::new(ast::Query {
-                body: Box::new(new_body),
-                limit: limit
-                    .as_ref()
-                    .map(|l| translate_expr(l, databases, &scopes))
-                    .transpose()?,
-                order_by: new_order_by,
-                offset: new_offset,
-
-                fetch: None,
-                for_clause: None,
-                limit_by: vec![],
-                locks: vec![],
-                with: None,
-            }))
-        }
-    }
-}
-
-fn translate_offset(
-    Offset { rows, value }: &Offset,
-    databases: &mut DatabaseNamesByPath,
-    scopes: &Scopes,
-) -> Result<Offset, String> {
-    Ok(Offset {
-        rows: *rows,
-        value: translate_expr(value, databases, scopes)?,
-    })
-}
-
-fn translate_order_by_expr(
-    expr: &OrderByExpr,
-    databases: &mut DatabaseNamesByPath,
-    scopes: &Scopes,
-) -> Result<OrderByExpr, String> {
-    match expr {
-        OrderByExpr {
-            expr,
-            asc,
-            nulls_first,
-        } => {
-            let new_expr = translate_expr(expr, databases, scopes)?;
-
-            Ok(OrderByExpr {
-                expr: new_expr,
-                asc: *asc,
-                nulls_first: *nulls_first,
-            })
-        }
-    }
-}
-
-fn translate_set_expr(
-    body: &SetExpr,
-    databases: &mut DatabaseNamesByPath,
-    scopes: &Scopes,
-) -> Result<(SetExpr, Option<Scope>), String> {
-    match body {
-        SetExpr::Values(Values { explicit_row, rows }) => Ok((
-            SetExpr::Values(Values {
-                explicit_row: *explicit_row,
-                rows: rows
-                    .into_iter()
-                    .map(|row| {
-                        row.into_iter()
-                            .map(|expr| translate_expr(expr, databases, scopes))
-                            .collect::<Result<Vec<_>, _>>()
-                            .map_err(|e| e.to_string())
-                    })
-                    .collect::<Result<Vec<_>, _>>()?,
-            }),
-            None,
-        )),
-        SetExpr::Select(select) => {
-            let (new_select, new_scope) = translate_select(select, databases, scopes)?;
-            Ok((SetExpr::Select(new_select), Some(new_scope)))
-        }
-        SetExpr::SetOperation { .. } => {
-            translate_set_operation(body, databases, scopes).map(|op| (op, None))
-        }
-
-        SetExpr::Query(_) => Err("not implemented: SetExpr::Query".to_string()),
-        SetExpr::Insert(_) => Err("not implemented: SetExpr::Insert".to_string()),
-        SetExpr::Update(_) => Err("not implemented: SetExpr::Update".to_string()),
-        SetExpr::Table(_) => Err("not implemented: SetExpr::Table".to_string()),
-    }
-}
-
-fn translate_set_operation(
-    body: &SetExpr,
-    databases: &mut DatabaseNamesByPath,
-    scopes: &Scopes,
-) -> Result<SetExpr, String> {
-    match body {
-        SetExpr::SetOperation {
-            left,
-            op,
-            right,
-            set_quantifier,
-        } => {
-            let (new_left, _) = translate_set_expr(left, databases, scopes)?;
-            let (new_right, _) = translate_set_expr(right, databases, scopes)?;
-
-            Ok(SetExpr::SetOperation {
-                left: Box::new(new_left),
-                op: *op,
-                right: Box::new(new_right),
-                set_quantifier: *set_quantifier,
-            })
-        }
-        _ => {
-            unreachable!("Expected a SetOperation SetExpr");
-        }
-    }
-}
-
-fn translate_table_with_joins(
-    TableWithJoins { joins, relation }: &TableWithJoins,
-    upper_scopes: &Scopes,
-    databases: &mut DatabaseNamesByPath,
-    current_scope: &mut Scope,
-) -> Result<TableWithJoins, String> {
-    let new_relation =
-        translate_table_factor(relation, databases, &mut current_scope.referencable_tables)?;
-
-    let new_join = joins
-        .iter()
-        .map(|join| translate_join(join, upper_scopes, databases, current_scope))
-        .collect::<Result<Vec<_>, _>>()?;
-
-    Ok(TableWithJoins {
-        relation: new_relation,
-        joins: new_join,
-    })
-}
-
-fn translate_join(
-    join: &Join,
-    upper_scopes: &Scopes,
-    databases: &mut DatabaseNamesByPath,
-    current_scope: &mut Scope,
-) -> Result<Join, String> {
-    match join {
-        Join {
-            join_operator,
-            relation,
-        } => {
-            let new_relation = translate_table_factor(
-                relation,
-                databases,
-                &mut current_scope.referencable_tables,
-            )?;
-
-            let total_scopes = {
-                let mut s = upper_scopes.clone();
-                s.push(current_scope);
-                s
-            };
-
-            let new_join_operator =
-                translate_join_operator(join_operator, databases, &total_scopes)?;
-
-            Ok(Join {
-                join_operator: new_join_operator,
-                relation: new_relation,
-            })
-        }
-    }
-}
-
-fn translate_join_operator(
-    join_operator: &JoinOperator,
-    databases: &mut DatabaseNamesByPath,
-    scopes: &Scopes,
-) -> Result<JoinOperator, String> {
-    match join_operator {
-        JoinOperator::Inner(constraint) => {
-            let new_constraint = translate_join_constraint(constraint, scopes, databases)?;
-            Ok(JoinOperator::Inner(new_constraint))
-        }
-        JoinOperator::LeftOuter(constraint) => {
-            let new_constraint = translate_join_constraint(constraint, scopes, databases)?;
-            Ok(JoinOperator::LeftOuter(new_constraint))
-        }
-        JoinOperator::RightOuter(constraint) => {
-            let new_constraint = translate_join_constraint(constraint, scopes, databases)?;
-            Ok(JoinOperator::RightOuter(new_constraint))
-        }
-        JoinOperator::FullOuter(constraint) => {
-            let new_constraint = translate_join_constraint(constraint, scopes, databases)?;
-            Ok(JoinOperator::FullOuter(new_constraint))
-        }
-        JoinOperator::CrossJoin => Ok(JoinOperator::CrossJoin),
-        JoinOperator::LeftSemi(constraint) => {
-            let new_constraint = translate_join_constraint(constraint, scopes, databases)?;
-            Ok(JoinOperator::LeftSemi(new_constraint))
-        }
-        JoinOperator::RightSemi(constraint) => {
-            let new_constraint = translate_join_constraint(constraint, scopes, databases)?;
-            Ok(JoinOperator::RightSemi(new_constraint))
-        }
-        JoinOperator::LeftAnti(constraint) => {
-            let new_constraint = translate_join_constraint(constraint, scopes, databases)?;
-            Ok(JoinOperator::LeftAnti(new_constraint))
-        }
-        JoinOperator::RightAnti(constraint) => {
-            let new_constraint = translate_join_constraint(constraint, scopes, databases)?;
-            Ok(JoinOperator::RightAnti(new_constraint))
-        }
-        JoinOperator::CrossApply => Ok(JoinOperator::CrossApply),
-        JoinOperator::OuterApply => Ok(JoinOperator::OuterApply),
-    }
-}
-
-fn translate_join_constraint(
-    constraint: &JoinConstraint,
-    scopes: &Scopes,
-    databases: &mut DatabaseNamesByPath,
-) -> Result<JoinConstraint, String> {
-    match constraint {
-        JoinConstraint::On(expr) => {
-            let new_expr = translate_expr(expr, databases, scopes)?;
-            Ok(JoinConstraint::On(new_expr))
-        }
-        JoinConstraint::Natural => Ok(JoinConstraint::Natural),
-        JoinConstraint::None => Ok(JoinConstraint::None),
-
-        JoinConstraint::Using(_) => Err("not implemented: JoinConstraint::Using".to_string()),
-    }
-}
-
-fn translate_table_factor(
-    relation: &TableFactor,
-    databases: &mut DatabaseNamesByPath,
-    referencable_tables: &mut ReferencableTables,
-) -> Result<TableFactor, String> {
-    match relation {
-        TableFactor::Table {
-            alias,
-            args,
-            name: table_name,
-            partitions,
-            version,
-            with_hints,
-        } => {
-            if args.is_some() {
-                return Err("not implemented: TableFactor::Table::args".to_string());
-            }
-
-            if !partitions.is_empty() {
-                return Err("not implemented: TableFactor::Table::partitions".to_string());
-            }
-
-            if version.is_some() {
-                return Err("not implemented: TableFactor::Table::version".to_string());
-            }
-
-            if !with_hints.is_empty() {
-                return Err("not implemented: TableFactor::Table::with_hints".to_string());
-            }
-
-            let db_reference = convert_path_to_database(table_name, databases)?;
-
-            add_to_referencable_tables(&Some(&table_name), alias, databases, referencable_tables)?;
-
-            Ok(TableFactor::Table {
-                alias: alias.clone(),
-                name: ObjectName(get_qualified_values_table_identifiers(&db_reference)),
-
-                args: None,
-                partitions: vec![],
-                version: None,
-                with_hints: vec![],
-            })
-        }
-        TableFactor::Derived { .. } => {
-            translate_table_factor_derived(relation, databases, referencable_tables)
-        }
-
-        TableFactor::TableFunction { .. } => {
-            Err("not implemented: TableFactor::TableFunction".to_string())
-        }
-        TableFactor::Function { .. } => Err("not implemented: TableFactor::Function".to_string()),
-        TableFactor::UNNEST { .. } => Err("not implemented: TableFactor::UNNEST".to_string()),
-        TableFactor::JsonTable { .. } => Err("not implemented: TableFactor::JsonTable".to_string()),
-        TableFactor::NestedJoin { .. } => {
-            Err("not implemented: TableFactor::NestedJoin".to_string())
-        }
-        TableFactor::Pivot { .. } => Err("not implemented: TableFactor::Pivot".to_string()),
-        TableFactor::Unpivot { .. } => Err("not implemented: TableFactor::Unpivot".to_string()),
     }
 }
 
@@ -1013,360 +1626,6 @@ fn add_to_referencable_tables(
     Ok(())
 }
 
-fn translate_table_factor_derived(
-    relation: &TableFactor,
-    databases: &mut DatabaseNamesByPath,
-    referencable_tables: &mut ReferencableTables,
-) -> Result<TableFactor, String> {
-    match relation {
-        TableFactor::Derived {
-            lateral,
-            subquery,
-            alias,
-        } => {
-            let new_subquery = translate_ast_query(subquery, databases)?;
-
-            add_to_referencable_tables(&None, alias, databases, referencable_tables)?;
-
-            Ok(TableFactor::Derived {
-                lateral: *lateral,
-                subquery: new_subquery,
-                alias: alias.clone(),
-            })
-        }
-        _ => {
-            unreachable!("Expected a Derived TableFactor");
-        }
-    }
-}
-
-fn translate_select_tables(
-    tables: &Vec<TableWithJoins>,
-    scopes: &Scopes,
-    databases: &mut DatabaseNamesByPath,
-) -> Result<(Vec<TableWithJoins>, Scope), String> {
-    let referencable_tables: ReferencableTables = HashMap::new();
-
-    let mut new_scope = Scope {
-        referencable_tables,
-    };
-
-    let new_tables = tables
-        .iter()
-        .map(|t| translate_table_with_joins(t, scopes, databases, &mut new_scope))
-        .collect::<Result<Vec<TableWithJoins>, String>>()?;
-
-    Ok((new_tables, new_scope))
-}
-
-fn translate_select(
-    select: &Box<Select>,
-    databases: &mut DatabaseNamesByPath,
-    scopes: &Scopes,
-) -> Result<(Box<Select>, Scope), String> {
-    match select.as_ref() {
-        Select {
-            cluster_by,
-            distinct,
-            distribute_by,
-            from,
-            group_by,
-            having,
-            into,
-            lateral_views,
-            named_window,
-            projection,
-            qualify,
-            selection,
-            sort_by,
-            top,
-        } => {
-            if !cluster_by.is_empty() {
-                return Err("not implemented: Select::cluster_by".to_string());
-            }
-
-            if distinct.is_some() {
-                return Err("not implemented: Select::distinct".to_string());
-            }
-
-            if !distribute_by.is_empty() {
-                return Err("not implemented: Select::distribute_by".to_string());
-            }
-
-            if having.is_some() {
-                return Err("not implemented: Select::having".to_string());
-            }
-
-            if into.is_some() {
-                return Err("not implemented: Select::into".to_string());
-            }
-
-            if !lateral_views.is_empty() {
-                return Err("not implemented: Select::lateral_views".to_string());
-            }
-
-            if !named_window.is_empty() {
-                return Err("not implemented: Select::named_window".to_string());
-            }
-
-            if qualify.is_some() {
-                return Err("not implemented: Select::qualify".to_string());
-            }
-
-            if !sort_by.is_empty() {
-                // TODO: Just a thought. If this is ever released to the public, maybe make these error messages friendlier and encourage/facilitate contribution
-                return Err("not implemented: Select::sort_by".to_string());
-            }
-
-            if top.is_some() {
-                return Err("not implemented: Select::top".to_string());
-            }
-
-            let (new_from, new_scope) = translate_select_tables(from, scopes, databases)?;
-
-            let scopes: Scopes = {
-                let mut new_scopes = scopes.clone();
-                new_scopes.push(&new_scope);
-                new_scopes
-            };
-
-            let new_projection = projection
-                .iter()
-                .map(|item| translate_select_item(item, databases, &scopes))
-                .collect::<Result<Vec<_>, _>>()?;
-
-            let new_selection = selection
-                .as_ref()
-                .map(|expr| translate_expr(expr, databases, &scopes))
-                .transpose()?;
-
-            let new_group_by = match group_by {
-                GroupByExpr::Expressions(expressions) => {
-                    let new_expressions = expressions
-                        .iter()
-                        .map(|expr| translate_expr(expr, databases, &scopes))
-                        .collect::<Result<Vec<_>, _>>()?;
-
-                    GroupByExpr::Expressions(new_expressions)
-                }
-                GroupByExpr::All => return Err("not implemented: GroupByExpr::All".to_string()),
-            };
-
-            Ok((
-                Box::new(Select {
-                    from: new_from,
-                    group_by: new_group_by,
-                    projection: new_projection,
-                    selection: new_selection,
-
-                    cluster_by: vec![],
-                    distinct: None,
-                    distribute_by: vec![],
-                    having: None,
-                    into: None,
-                    lateral_views: vec![],
-                    named_window: vec![],
-                    qualify: None,
-                    sort_by: vec![],
-                    top: None,
-                }),
-                new_scope,
-            ))
-        }
-    }
-}
-
-fn translate_select_item(
-    item: &SelectItem,
-    databases: &mut DatabaseNamesByPath,
-    scopes: &Scopes,
-) -> Result<SelectItem, String> {
-    match item {
-        SelectItem::UnnamedExpr(expr) => Ok(SelectItem::UnnamedExpr(translate_expr(
-            expr, databases, scopes,
-        )?)),
-
-        SelectItem::ExprWithAlias { expr, alias } => {
-            let new_expr = translate_expr(expr, databases, scopes)?;
-
-            Ok(SelectItem::ExprWithAlias {
-                expr: new_expr,
-                alias: alias.clone(),
-            })
-        }
-        SelectItem::Wildcard(wildcard_options) => {
-            let new_wildcard_options = translate_wildcard_options(wildcard_options)?;
-            Ok(SelectItem::Wildcard(new_wildcard_options))
-        }
-
-        SelectItem::QualifiedWildcard(_, _) => {
-            Err("not implemented: SelectItem::QualifiedWildcard".to_string())
-        }
-    }
-}
-
-fn translate_wildcard_options(
-    WildcardAdditionalOptions {
-        opt_except,
-        opt_exclude,
-        opt_rename,
-        opt_replace,
-    }: &WildcardAdditionalOptions,
-) -> Result<WildcardAdditionalOptions, String> {
-    if opt_except.is_some() {
-        return Err("not implemented: WildcardAdditionalOptions::opt_except".to_string());
-    }
-
-    if opt_exclude.is_some() {
-        return Err("not implemented: WildcardAdditionalOptions::opt_exclude".to_string());
-    }
-
-    if opt_rename.is_some() {
-        return Err("not implemented: WildcardAdditionalOptions::opt_rename".to_string());
-    }
-
-    if opt_replace.is_some() {
-        return Err("not implemented: WildcardAdditionalOptions::opt_replace".to_string());
-    }
-
-    Ok(WildcardAdditionalOptions {
-        opt_except: None,
-        opt_exclude: None,
-        opt_rename: None,
-        opt_replace: None,
-    })
-}
-
-fn translate_expr(
-    expr: &Expr,
-    databases: &mut DatabaseNamesByPath,
-    scopes: &Scopes,
-) -> Result<Expr, String> {
-    match expr {
-        Expr::Value(value) => Ok(Expr::Value(translate_value(value)?)),
-        Expr::Function(func) => Ok(Expr::Function(translate_function(func, databases, scopes)?)),
-        Expr::CompoundIdentifier(identifiers) => {
-            let (table_reference, column_name) =
-                extract_binary_identifiers(identifiers, "expression")?;
-
-            let table_replacement_identifiers =
-                get_replacement_identifiers_for_table(scopes, table_reference)?;
-
-            let mut new_identifiers = table_replacement_identifiers.clone();
-            new_identifiers.push(Ident::new(&column_name));
-
-            Ok(Expr::CompoundIdentifier(new_identifiers))
-        }
-        Expr::BinaryOp { left, op, right } => {
-            let new_left = translate_expr(left, databases, scopes)?;
-            let new_right = translate_expr(right, databases, scopes)?;
-            Ok(Expr::BinaryOp {
-                left: Box::new(new_left),
-                op: op.clone(),
-                right: Box::new(new_right),
-            })
-        }
-        Expr::Identifier(_) => Ok(expr.clone()),
-        Expr::InSubquery { .. } => translate_in_subquery(expr, databases, scopes),
-        Expr::IsNull(expr) => Ok(Expr::IsNull(Box::new(translate_expr(
-            expr, databases, scopes,
-        )?))),
-        Expr::Nested(nested_expr) => Ok(Expr::Nested(Box::new(translate_expr(
-            nested_expr,
-            databases,
-            scopes,
-        )?))),
-
-        Expr::JsonAccess { .. } => Err("Unhandled syntax: Expr::JsonAccess".to_string()),
-        Expr::CompositeAccess { .. } => Err("Unhandled syntax: Expr::CompositeAccess".to_string()),
-        Expr::IsFalse(_) => Err("Unhandled syntax: Expr::IsFalse".to_string()),
-        Expr::IsNotFalse(_) => Err("Unhandled syntax: Expr::IsNotFalse".to_string()),
-        Expr::InList { .. } => Err("Unhandled syntax: Expr::InList".to_string()),
-        Expr::InUnnest { .. } => Err("Unhandled syntax: Expr::InUnnest".to_string()),
-        Expr::Between { .. } => Err("Unhandled syntax: Expr::Between".to_string()),
-        Expr::Like { .. } => Err("Unhandled syntax: Expr::Like".to_string()),
-        Expr::ILike { .. } => Err("Unhandled syntax: Expr::ILike".to_string()),
-        Expr::SimilarTo { .. } => Err("Unhandled syntax: Expr::SimilarTo".to_string()),
-        Expr::RLike { .. } => Err("Unhandled syntax: Expr::RLike".to_string()),
-        Expr::AnyOp { .. } => Err("Unhandled syntax: Expr::AnyOp".to_string()),
-        Expr::AllOp { .. } => Err("Unhandled syntax: Expr::AllOp".to_string()),
-        Expr::UnaryOp { .. } => Err("Unhandled syntax: Expr::UnaryOp".to_string()),
-        Expr::Convert { .. } => Err("Unhandled syntax: Expr::Convert".to_string()),
-        Expr::Cast { .. } => Err("Unhandled syntax: Expr::Cast".to_string()),
-        Expr::TryCast { .. } => Err("Unhandled syntax: Expr::TryCast".to_string()),
-        Expr::SafeCast { .. } => Err("Unhandled syntax: Expr::SafeCast".to_string()),
-        Expr::AtTimeZone { .. } => Err("Unhandled syntax: Expr::AtTimeZone".to_string()),
-        Expr::Extract { .. } => Err("Unhandled syntax: Expr::Extract".to_string()),
-        Expr::Ceil { .. } => Err("Unhandled syntax: Expr::Ceil".to_string()),
-        Expr::Floor { .. } => Err("Unhandled syntax: Expr::Floor".to_string()),
-        Expr::Position { .. } => Err("Unhandled syntax: Expr::Position".to_string()),
-        Expr::Substring { .. } => Err("Unhandled syntax: Expr::Substring".to_string()),
-        Expr::IsTrue(_) => Err("Unhandled syntax: Expr::IsTrue".to_string()),
-        Expr::IsNotTrue(_) => Err("Unhandled syntax: Expr::IsNotTrue".to_string()),
-        Expr::IsNotNull(_) => Err("Unhandled syntax: Expr::IsNotNull".to_string()),
-        Expr::IsUnknown(_) => Err("Unhandled syntax: Expr::IsUnknown".to_string()),
-        Expr::IsNotUnknown(_) => Err("Unhandled syntax: Expr::IsNotUnknown".to_string()),
-        Expr::IsDistinctFrom(_, _) => Err("Unhandled syntax: Expr::IsDistinctFrom".to_string()),
-        Expr::IsNotDistinctFrom(_, _) => {
-            Err("Unhandled syntax: Expr::IsNotDistinctFrom".to_string())
-        }
-        Expr::Trim { .. } => Err("Unhandled syntax: Expr::Trim".to_string()),
-        Expr::Overlay { .. } => Err("Unhandled syntax: Expr::Overlay".to_string()),
-        Expr::Collate { .. } => Err("Unhandled syntax: Expr::Collate".to_string()),
-        Expr::IntroducedString { .. } => {
-            Err("Unhandled syntax: Expr::IntroducedString".to_string())
-        }
-        Expr::TypedString { .. } => Err("Unhandled syntax: Expr::TypedString".to_string()),
-        Expr::MapAccess { .. } => Err("Unhandled syntax: Expr::MapAccess".to_string()),
-        Expr::AggregateExpressionWithFilter { .. } => {
-            Err("Unhandled syntax: Expr::AggregateExpressionWithFilter".to_string())
-        }
-        Expr::Case { .. } => Err("Unhandled syntax: Expr::Case".to_string()),
-        Expr::Exists { .. } => Err("Unhandled syntax: Expr::Exists".to_string()),
-        Expr::Subquery(_) => Err("Unhandled syntax: Expr::Subquery".to_string()),
-        Expr::ArraySubquery(_) => Err("Unhandled syntax: Expr::ArraySubquery".to_string()),
-        Expr::ListAgg(_) => Err("Unhandled syntax: Expr::ListAgg".to_string()),
-        Expr::ArrayAgg(_) => Err("Unhandled syntax: Expr::ArrayAgg".to_string()),
-        Expr::GroupingSets(_) => Err("Unhandled syntax: Expr::GroupingSets".to_string()),
-        Expr::Cube(_) => Err("Unhandled syntax: Expr::Cube".to_string()),
-        Expr::Rollup(_) => Err("Unhandled syntax: Expr::Rollup".to_string()),
-        Expr::Tuple(_) => Err("Unhandled syntax: Expr::Tuple".to_string()),
-        Expr::Struct { .. } => Err("Unhandled syntax: Expr::Struct".to_string()),
-        Expr::Named { .. } => Err("Unhandled syntax: Expr::Named".to_string()),
-        Expr::ArrayIndex { .. } => Err("Unhandled syntax: Expr::ArrayIndex".to_string()),
-        Expr::Array(_) => Err("Unhandled syntax: Expr::Array".to_string()),
-        Expr::Interval(_) => Err("Unhandled syntax: Expr::Interval".to_string()),
-        Expr::MatchAgainst { .. } => Err("Unhandled syntax: Expr::MatchAgainst".to_string()),
-        Expr::Wildcard => Err("Unhandled syntax: Expr::Wildcard".to_string()),
-        Expr::QualifiedWildcard(_) => Err("Unhandled syntax: Expr::QualifiedWildcard".to_string()),
-    }
-}
-
-fn translate_in_subquery(
-    expr: &Expr,
-    databases: &mut DatabaseNamesByPath,
-    scopes: &Scopes,
-) -> Result<Expr, String> {
-    match expr {
-        Expr::InSubquery {
-            expr,
-            negated,
-            subquery,
-        } => {
-            let new_expr = translate_expr(expr, databases, scopes)?;
-
-            let new_subquery = translate_ast_query(subquery, databases)?;
-
-            Ok(Expr::InSubquery {
-                expr: Box::new(new_expr),
-                negated: *negated,
-                subquery: new_subquery,
-            })
-        }
-        _ => unreachable!("Expected an InSubquery expression"),
-    }
-}
-
 fn get_replacement_identifiers_for_table<'a>(
     scopes: &Scopes<'a>,
     table_reference: String,
@@ -1383,61 +1642,6 @@ fn get_replacement_identifiers_for_table<'a>(
     ))
 }
 
-fn translate_function(
-    func: &Function,
-    databases: &mut DatabaseNamesByPath,
-    scopes: &Scopes,
-) -> Result<Function, String> {
-    let Function {
-        args,
-        distinct,
-        filter,
-        name,
-        null_treatment,
-        order_by,
-        over,
-        // "special" means the function's parentheses are omitted
-        special,
-    } = func;
-
-    if *distinct {
-        return Err("Unhandled syntax: Function::distinct".to_string());
-    }
-
-    if filter.is_some() {
-        return Err("Unhandled syntax: Function::filter".to_string());
-    }
-
-    if null_treatment.is_some() {
-        return Err("Unhandled syntax: Function::null_treatment".to_string());
-    }
-
-    if !order_by.is_empty() {
-        return Err("Unhandled syntax: Function::order_by".to_string());
-    }
-
-    if over.is_some() {
-        return Err("Unhandled syntax: Function::over".to_string());
-    }
-
-    validate_function_name(name)?;
-
-    Ok(Function {
-        name: name.clone(),
-        special: *special,
-        args: args
-            .into_iter()
-            .map(|arg| translate_function_arg(arg, databases, scopes))
-            .collect::<Result<Vec<_>, _>>()?,
-
-        distinct: false,
-        filter: None,
-        over: None,
-        null_treatment: None,
-        order_by: vec![],
-    })
-}
-
 fn validate_function_name(name: &ObjectName) -> Result<(), String> {
     let ObjectName(name_identifiers) = name;
 
@@ -1452,75 +1656,6 @@ fn validate_function_name(name: &ObjectName) -> Result<(), String> {
         Ok(())
     } else {
         Err(format!("Unsupported function: {}", unary_name))
-    }
-}
-
-fn translate_function_arg(
-    function_arg: &FunctionArg,
-    databases: &mut DatabaseNamesByPath,
-    scopes: &Scopes,
-) -> Result<FunctionArg, String> {
-    match function_arg {
-        FunctionArg::Unnamed(function_arg_expr) => Ok(FunctionArg::Unnamed(
-            translate_function_arg_expr(function_arg_expr, databases, scopes)?,
-        )),
-
-        FunctionArg::Named { .. } => Err("Unhandled syntax: FunctionArg::Named".to_string()),
-    }
-}
-
-fn translate_function_arg_expr(
-    function_arg_expr: &FunctionArgExpr,
-    databases: &mut DatabaseNamesByPath,
-    scopes: &Scopes,
-) -> Result<FunctionArgExpr, String> {
-    match function_arg_expr {
-        FunctionArgExpr::Expr(expr) => Ok(FunctionArgExpr::Expr(translate_expr(
-            expr, databases, scopes,
-        )?)),
-        FunctionArgExpr::Wildcard => Ok(FunctionArgExpr::Wildcard),
-
-        FunctionArgExpr::QualifiedWildcard(_) => {
-            Err("Unhandled syntax: FunctionArgExpr::QualifiedWildcard".to_string())
-        }
-    }
-}
-
-fn translate_value(value: &Value) -> Result<Value, String> {
-    match value {
-        Value::Placeholder(s) => {
-            if s == "?" {
-                Ok(value.clone())
-            } else {
-                Err(format!("Unhandled value: Value::Placeholder({})", s))
-            }
-        }
-        Value::SingleQuotedString(_) => Ok(value.clone()),
-        Value::Number(_, _) => Ok(value.clone()),
-        Value::Null => Ok(value.clone()),
-
-        Value::DollarQuotedString(_) => {
-            Err("Unhandled value: Value::DollarQuotedString".to_string())
-        }
-        Value::EscapedStringLiteral(_) => {
-            Err("Unhandled value: Value::EscapedStringLiteral".to_string())
-        }
-        Value::SingleQuotedByteStringLiteral(_) => {
-            Err("Unhandled value: Value::SingleQuotedByteStringLiteral".to_string())
-        }
-        Value::DoubleQuotedByteStringLiteral(_) => {
-            Err("Unhandled value: Value::DoubleQuotedByteStringLiteral".to_string())
-        }
-        Value::RawStringLiteral(_) => Err("Unhandled value: Value::RawStringLiteral".to_string()),
-        Value::NationalStringLiteral(_) => {
-            Err("Unhandled value: Value::NationalStringLiteral".to_string())
-        }
-        Value::HexStringLiteral(_) => Err("Unhandled value: Value::HexStringLiteral".to_string()),
-        Value::DoubleQuotedString(_) => {
-            Err("Unhandled value: Value::DoubleQuotedString".to_string())
-        }
-        Value::Boolean(_) => Err("Unhandled value: Value::Boolean".to_string()),
-        Value::UnQuotedString(_) => Err("Unhandled value: Value::UnQuotedString".to_string()),
     }
 }
 
