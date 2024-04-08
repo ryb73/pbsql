@@ -59,8 +59,7 @@ trait SqlAstTraverser<Error> {
         &mut self,
         on_insert: &Option<OnInsert>,
     ) -> Result<Option<OnInsert>, Error>;
-    fn traverse_on_conflict(&mut self, on_conflict: &OnConflict)
-        -> Result<Option<OnInsert>, Error>;
+    fn traverse_on_conflict(&mut self, on_conflict: &OnConflict) -> Result<OnConflict, Error>;
     fn traverse_ast_query(&mut self, query: &Box<ast::Query>) -> Result<Box<ast::Query>, Error>;
     fn traverse_offset(&mut self, offset: &Offset, scopes: &Scopes) -> Result<Offset, Error>;
     fn traverse_order_by_expr(
@@ -616,7 +615,9 @@ impl SqlAstTraverser<String> for PathConvertor {
         on_insert: &Option<OnInsert>,
     ) -> Result<Option<OnInsert>, String> {
         match on_insert {
-            Some(OnInsert::OnConflict(on_conflict)) => self.traverse_on_conflict(on_conflict),
+            Some(OnInsert::OnConflict(on_conflict)) => Ok(Some(OnInsert::OnConflict(
+                self.traverse_on_conflict(on_conflict)?,
+            ))),
             None => Ok(None),
 
             Some(OnInsert::DuplicateKeyUpdate(..)) => {
@@ -633,16 +634,16 @@ impl SqlAstTraverser<String> for PathConvertor {
             action,
             conflict_target,
         }: &OnConflict,
-    ) -> Result<Option<OnInsert>, String> {
+    ) -> Result<OnConflict, String> {
         if conflict_target.is_some() {
             return Err("not implemented: OnConflict::conflict_target".to_string());
         }
 
         match action {
-            OnConflictAction::DoNothing => Ok(Some(OnInsert::OnConflict(OnConflict {
+            OnConflictAction::DoNothing => Ok(OnConflict {
                 action: OnConflictAction::DoNothing,
                 conflict_target: None,
-            }))),
+            }),
 
             OnConflictAction::DoUpdate(_) => {
                 Err("not implemented: OnConflictAction::DoUpdate".to_string())
