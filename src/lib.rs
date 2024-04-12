@@ -471,13 +471,13 @@ impl SqlAstTraverser<String> for PathConvertor {
                 let translated_db_name =
                     convert_path_to_database(table_name, &mut self.database_names)?;
 
-                // TODO: use translate_expr instead
-                for OrderByExpr { expr, .. } in columns {
-                    validate_expr(expr)?;
-                }
+                let new_columns = columns
+                    .iter()
+                    .map(|c| self.traverse_order_by_expr(c))
+                    .collect::<Result<Vec<_>, _>>()?;
 
                 Ok(CreateIndex {
-                    columns: columns.clone(),
+                    columns: new_columns,
                     if_not_exists: *if_not_exists,
                     name: Some(ObjectName(vec![
                         Ident::new(translated_db_name),
@@ -1471,13 +1471,6 @@ fn convert_path_to_database(
 
 fn get_qualified_values_table_identifiers(db_reference: &str) -> Vec<Ident> {
     vec![Ident::new(db_reference), Ident::new(VALUES_TABLE_NAME)]
-}
-
-fn validate_expr(expr: &Expr) -> Result<(), String> {
-    match expr {
-        Expr::Identifier(_) => Ok(()),
-        _ => Err("not implemented".to_string()),
-    }
 }
 
 fn add_to_referencable_tables(
