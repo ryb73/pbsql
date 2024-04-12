@@ -590,9 +590,27 @@ impl SqlAstTraverser<String> for PathConvertor {
                 unique,
                 if_not_exists,
                 nulls_distinct,
-                // TODO: handle other fields, if only by throwing an error for unhandled syntax.
-                ..
+                concurrently,
+                include,
+                predicate,
+                using,
             } => {
+                if *concurrently {
+                    return Err("not implemented: CreateIndex::concurrently".to_string());
+                }
+
+                if !include.is_empty() {
+                    return Err("not implemented: CreateIndex::include".to_string());
+                }
+
+                if predicate.is_some() {
+                    return Err("not implemented: CreateIndex::predicate".to_string());
+                }
+
+                if using.is_some() {
+                    return Err("not implemented: CreateIndex::using".to_string());
+                }
+
                 let index_name = extract_unary_identifier(name_identifiers, "index")?;
 
                 let translated_db_name =
