@@ -2,8 +2,9 @@ use serde::Serialize;
 use sqlparser::{
     ast::{
         self, Assignment, Expr, Function, FunctionArg, FunctionArgExpr, GroupByExpr,
-        HiveDistributionStyle, Ident, Join, JoinConstraint, JoinOperator, ObjectName, ObjectType,
-        Offset, OnConflict, OnConflictAction, OnInsert, OrderByExpr, Select, SelectItem, SetExpr,
+        HiveDistributionStyle, HiveFormat, Ident, Join, JoinConstraint, JoinOperator, ObjectName,
+        ObjectType, Offset, OnConflict, OnConflictAction, OnInsert, OrderByExpr, Select,
+        SelectItem, SetExpr,
         Statement::{self, CreateIndex, CreateTable, Insert},
         TableAlias, TableFactor, TableWithJoins, Value, Values, WildcardAdditionalOptions,
     },
@@ -409,44 +410,170 @@ impl SqlAstTraverser<String> for PathConvertor {
             if_not_exists,
             name,
             columns,
-            // TODO: handle other fields, if only by throwing an error for unhandled syntax.
-            ..
+            auto_increment_offset,
+            clone,
+            cluster_by,
+            collation,
+            comment,
+            constraints,
+            default_charset,
+            engine,
+            external,
+            file_format,
+            global,
+            hive_distribution,
+            hive_formats,
+            like,
+            location,
+            on_cluster,
+            on_commit,
+            options,
+            or_replace,
+            order_by,
+            partition_by,
+            query,
+            strict,
+            table_properties,
+            temporary,
+            transient,
+            with_options,
+            without_rowid,
         } = create_table
         {
+            if clone.is_some() {
+                return Err("not implemented: CreateTable::clone".to_string());
+            }
+
+            if cluster_by.is_some() {
+                return Err("not implemented: CreateTable::cluster_by".to_string());
+            }
+
+            if comment.is_some() {
+                return Err("not implemented: CreateTable::comment".to_string());
+            }
+
+            if !constraints.is_empty() {
+                return Err("not implemented: CreateTable::constraints".to_string());
+            }
+
+            if engine.is_some() {
+                return Err("not implemented: CreateTable::engine".to_string());
+            }
+
+            if *external {
+                return Err("not implemented: CreateTable::external".to_string());
+            }
+
+            if file_format.is_some() {
+                return Err("not implemented: CreateTable::file_format".to_string());
+            }
+
+            if global.is_some() {
+                return Err("not implemented: CreateTable::global".to_string());
+            }
+
+            if hive_distribution != &HiveDistributionStyle::NONE {
+                return Err("not implemented: CreateTable::hive_distribution".to_string());
+            }
+
+            if let Some(HiveFormat {
+                location,
+                row_format,
+                storage,
+            }) = hive_formats
+            {
+                if location.is_some() || row_format.is_some() || storage.is_some() {
+                    return Err("not implemented: CreateTable::hive_formats".to_string());
+                }
+            }
+
+            if like.is_some() {
+                return Err("not implemented: CreateTable::like".to_string());
+            }
+
+            if location.is_some() {
+                return Err("not implemented: CreateTable::location".to_string());
+            }
+
+            if on_cluster.is_some() {
+                return Err("not implemented: CreateTable::on_cluster".to_string());
+            }
+
+            if on_commit.is_some() {
+                return Err("not implemented: CreateTable::on_commit".to_string());
+            }
+
+            if options.is_some() {
+                return Err("not implemented: CreateTable::options".to_string());
+            }
+
+            if order_by.is_some() {
+                return Err("not implemented: CreateTable::order_by".to_string());
+            }
+
+            if partition_by.is_some() {
+                return Err("not implemented: CreateTable::partition_by".to_string());
+            }
+
+            if query.is_some() {
+                return Err("not implemented: CreateTable::query".to_string());
+            }
+
+            if !table_properties.is_empty() {
+                return Err("not implemented: CreateTable::table_properties".to_string());
+            }
+
+            if *temporary {
+                return Err("not implemented: CreateTable::temporary".to_string());
+            }
+
+            if *transient {
+                return Err("not implemented CreateTable::transient".to_string());
+            }
+
+            if !with_options.is_empty() {
+                return Err("not implemented: CreateTable::with_options".to_string());
+            }
+
+            if *without_rowid {
+                return Err("not implemented: CreateTable::without_rowid".to_string());
+            }
+
             let db_reference = convert_path_to_database(name, &mut self.database_names)?;
 
             Ok(CreateTable {
+                auto_increment_offset: *auto_increment_offset,
+                collation: collation.clone(),
+                columns: columns.clone(),
+                default_charset: default_charset.clone(),
                 if_not_exists: *if_not_exists,
                 name: ObjectName(get_qualified_values_table_identifiers(&db_reference)),
-                columns: columns.clone(),
-                or_replace: false,
-                temporary: false,
-                external: false,
-                global: None,
-                transient: false,
+                or_replace: *or_replace,
+                strict: *strict,
+
+                clone: None,
+                cluster_by: None,
+                comment: None,
                 constraints: vec![],
+                engine: None,
+                external: false,
+                file_format: None,
+                global: None,
                 hive_distribution: HiveDistributionStyle::NONE,
                 hive_formats: None,
-                table_properties: vec![],
-                with_options: vec![],
-                file_format: None,
-                location: None,
-                query: None,
-                without_rowid: false,
                 like: None,
-                clone: None,
-                engine: None,
-                comment: None,
-                auto_increment_offset: None,
-                default_charset: None,
-                collation: None,
-                on_commit: None,
+                location: None,
                 on_cluster: None,
+                on_commit: None,
+                options: None,
                 order_by: None,
                 partition_by: None,
-                cluster_by: None,
-                options: None,
-                strict: false,
+                query: None,
+                table_properties: vec![],
+                temporary: false,
+                transient: false,
+                with_options: vec![],
+                without_rowid: false,
             })
         } else {
             unreachable!("Expected a CreateTable statement");
@@ -1553,33 +1680,121 @@ fn validate_function_name(name: &ObjectName) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use sqlparser::ast::{Assignment, Ident, ObjectName};
+    use sqlparser::ast::{
+        CharacterLength, ColumnDef, ColumnOption, ColumnOptionDef, ConstraintCharacteristics,
+        DataType, Ident, ObjectName, Query, ReferentialAction,
+    };
 
     use super::*;
 
     #[test]
     fn build_sql_test() {
-        let blah = Insert {
-            after_columns: vec![],
-            columns: vec![],
-            table_name: ObjectName(vec![Ident::new("tabby")]),
-            ignore: true,
-            source: None,
-            into: true,
-            on: Some(sqlparser::ast::OnInsert::DuplicateKeyUpdate(vec![
-                Assignment {
-                    id: vec![Ident::new("idd")],
-                    value: Expr::Value(sqlparser::ast::Value::Boolean(true)),
+        let blah = CreateTable {
+            auto_increment_offset: Some(8),
+            clone: None,
+            cluster_by: None,
+            collation: Some("utf8mb4_general_ci".to_string()),
+            columns: vec![
+                ColumnDef {
+                    data_type: DataType::Varchar(Some(CharacterLength::IntegerLength {
+                        length: 255,
+                        unit: None,
+                    })),
+                    name: Ident::new("id"),
+                    collation: None,
+                    options: vec![ColumnOptionDef {
+                        name: Some(Ident::new("primary".to_string())),
+                        option: ColumnOption::ForeignKey {
+                            foreign_table: ObjectName(vec![Ident::new("dwaynee")]),
+                            referred_columns: vec![Ident::new("id")],
+                            on_delete: Some(ReferentialAction::Cascade),
+                            on_update: Some(ReferentialAction::Cascade),
+                            characteristics: Some(ConstraintCharacteristics {
+                                deferrable: Some(true),
+                                initially: None,
+                                enforced: None,
+                            }),
+                        },
+                    }],
                 },
-            ])),
-            or: None,
-            overwrite: true,
-            partitioned: None,
-            priority: None,
-            replace_into: true,
-            returning: None,
-            table: true,
-            table_alias: None,
+                ColumnDef {
+                    data_type: DataType::Varchar(Some(CharacterLength::IntegerLength {
+                        length: 255,
+                        unit: None,
+                    })),
+                    name: Ident::new("name"),
+                    collation: None,
+                    options: vec![ColumnOptionDef {
+                        name: Some(Ident::new("primary".to_string())),
+                        option: ColumnOption::Null,
+                    }],
+                },
+            ],
+            comment: Some("This is not a table".to_string()),
+            constraints: vec![/* TableConstraint::Unique {
+                name: Some(Ident::new("unique".to_string())),
+                columns: vec![Ident::new("id")],
+                is_primary: false,
+                characteristics: Some(ConstraintCharacteristics {
+                    deferrable: Some(true),
+                    initially: None,
+                    enforced: None,
+                }),
+            } */],
+            default_charset: Some("utf8mb4".to_string()),
+            engine: None,
+            external: true,
+            file_format: Some(ast::FileFormat::AVRO),
+            global: Some(true),
+            hive_distribution: HiveDistributionStyle::NONE,
+            hive_formats: None,
+            if_not_exists: false,
+            like: None,
+            location: Some("s3://bucket/prefix".to_string()),
+            name: ObjectName(vec![Ident::new("dwayne")]),
+            on_cluster: None,
+            on_commit: Some(ast::OnCommit::Drop),
+            options: None,
+            or_replace: false,
+            order_by: None,
+            partition_by: None,
+            query: Some(Box::new(Query {
+                body: Box::new(SetExpr::Select(Box::new(Select {
+                    distinct: None,
+                    top: None,
+                    projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions {
+                        opt_exclude: None,
+                        opt_except: None,
+                        opt_rename: None,
+                        opt_replace: None,
+                    })],
+                    into: None,
+                    from: vec![],
+                    lateral_views: vec![],
+                    selection: Some(Expr::Value(Value::Number("1".to_string(), true))),
+                    group_by: GroupByExpr::Expressions(vec![]),
+                    cluster_by: vec![],
+                    distribute_by: vec![],
+                    sort_by: vec![],
+                    having: None,
+                    named_window: vec![],
+                    qualify: None,
+                }))),
+                with: None,
+                order_by: vec![],
+                limit: None,
+                limit_by: vec![],
+                offset: None,
+                fetch: None,
+                locks: vec![],
+                for_clause: None,
+            })),
+            strict: true,
+            table_properties: vec![],
+            temporary: false,
+            transient: false,
+            with_options: vec![],
+            without_rowid: true,
         };
 
         let compiled = blah.to_string();
