@@ -1,5 +1,7 @@
-use super::{VALUES_TABLE_INDEX_PREFIX, VALUES_TABLE_NAME};
+mod ast_views;
 
+use self::ast_views::DropStatementViewMutable;
+use super::{VALUES_TABLE_INDEX_PREFIX, VALUES_TABLE_NAME};
 use sqlparser::ast::{
     self, Assignment, Expr, Function, FunctionArg, FunctionArgExpr, GroupByExpr,
     HiveDistributionStyle, HiveFormat, Ident, Join, JoinConstraint, JoinOperator, ObjectName,
@@ -36,7 +38,7 @@ pub trait SqlAstTraverser<Error> {
     fn new() -> Self;
     fn traverse(&mut self, ast: &mut Vec<Statement>) -> TraversalResult;
     fn traverse_statement(&mut self, statement: &mut Statement) -> TraversalResult;
-    fn traverse_drop(&mut self, drop: &mut Statement) -> TraversalResult;
+    fn traverse_drop(&mut self, drop: DropStatementViewMutable) -> TraversalResult;
     fn traverse_update(&mut self, update: &mut Statement) -> TraversalResult;
     fn traverse_assignment(&mut self, assignment: &mut Assignment) -> TraversalResult;
     fn traverse_create_table(&mut self, create_table: &mut Statement) -> TraversalResult;
@@ -96,7 +98,7 @@ impl SqlAstTraverser<String> for PathConvertor {
             Insert { .. } => self.traverse_insert(statement),
             Statement::Update { .. } => self.traverse_update(statement),
             Statement::Query(query) => self.traverse_ast_query(query),
-            Statement::Drop { .. } => self.traverse_drop(statement),
+            Statement::Drop { .. } => self.traverse_drop(statement.try_into().unwrap()),
 
             Statement::Analyze { .. } => Err("not implemented: Statement::Analyze".to_string()),
             Statement::Truncate { .. } => Err("not implemented: Statement::Truncate".to_string()),
@@ -239,68 +241,54 @@ impl SqlAstTraverser<String> for PathConvertor {
             .collect()
     }
 
-    fn traverse_drop(&mut self, drop: &mut Statement) -> TraversalResult {
-        match drop {
-            Statement::Drop {
-                cascade,
-                if_exists: _,
-                names,
-                object_type,
-                purge,
-                restrict,
-                temporary,
-            } => {
-                match object_type {
-                    ObjectType::Table => {}
-                    ObjectType::View => Err("not implemented: Statement::Drop::View".to_string())?,
-                    ObjectType::Index => {
-                        Err("not implemented: Statement::Drop::Index".to_string())?
-                    }
-                    ObjectType::Schema => {
-                        Err("not implemented: Statement::Drop::Schema".to_string())?
-                    }
-                    ObjectType::Role => Err("not implemented: Statement::Drop::Role".to_string())?,
-                    ObjectType::Sequence => {
-                        Err("not implemented: Statement::Drop::Sequence".to_string())?
-                    }
-                    ObjectType::Stage => {
-                        Err("not implemented: Statement::Drop::Stage".to_string())?
-                    }
-                };
+    fn traverse_drop(&mut self, drop: DropStatementViewMutable) -> TraversalResult {
+        let DropStatementViewMutable {
+            cascade,
+            if_exists: _,
+            names,
+            object_type,
+            purge,
+            restrict,
+            temporary,
+        } = drop;
 
-                if *cascade {
-                    Err("not implemented: Statement::Drop::cascade".to_string())?;
-                };
+        match object_type {
+            ObjectType::Table => {}
+            ObjectType::View => Err("not implemented: Statement::Drop::View".to_string())?,
+            ObjectType::Index => Err("not implemented: Statement::Drop::Index".to_string())?,
+            ObjectType::Schema => Err("not implemented: Statement::Drop::Schema".to_string())?,
+            ObjectType::Role => Err("not implemented: Statement::Drop::Role".to_string())?,
+            ObjectType::Sequence => Err("not implemented: Statement::Drop::Sequence".to_string())?,
+            ObjectType::Stage => Err("not implemented: Statement::Drop::Stage".to_string())?,
+        };
 
-                if *purge {
-                    Err("not implemented: Statement::Drop::purge".to_string())?;
-                };
+        if *cascade {
+            Err("not implemented: Statement::Drop::cascade".to_string())?;
+        };
 
-                if *restrict {
-                    Err("not implemented: Statement::Drop::restrict".to_string())?;
-                };
+        if *purge {
+            Err("not implemented: Statement::Drop::purge".to_string())?;
+        };
 
-                if *temporary {
-                    Err("not implemented: Statement::Drop::temporary".to_string())?;
-                };
+        if *restrict {
+            Err("not implemented: Statement::Drop::restrict".to_string())?;
+        };
 
-                let new_names = names
-                    .iter()
-                    .map(|name| {
-                        let db_reference =
-                            convert_path_to_database(name, &mut self.database_names)?;
-                        Ok(ObjectName(get_qualified_values_table_identifiers(
-                            &db_reference,
-                        )))
-                    })
-                    .collect::<Result<Vec<_>, String>>()?;
+        if *temporary {
+            Err("not implemented: Statement::Drop::temporary".to_string())?;
+        };
 
-                *names = new_names;
-            }
-            _ => {
-                unreachable!("Expected a Drop statement")
-            }
-        }
+        let new_names = names
+            .iter()
+            .map(|name| {
+                let db_reference = convert_path_to_database(name, &mut self.database_names)?;
+                Ok(ObjectName(get_qualified_values_table_identifiers(
+                    &db_reference,
+                )))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+
+        *names = new_names;
 
         Ok(())
     }
