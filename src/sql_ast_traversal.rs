@@ -30,63 +30,50 @@ impl Scope {
     }
 }
 
+type TraversalResult = Result<(), String>;
+
 pub trait SqlAstTraverser<Error> {
     fn new() -> Self;
-    fn traverse(&mut self, ast: Vec<Statement>) -> Result<Vec<Statement>, Error>;
-    fn traverse_statement(&mut self, statement: Statement) -> Result<Statement, Error>;
-    fn traverse_drop(&mut self, drop: &Statement) -> Result<Statement, Error>;
-    fn traverse_update(&mut self, update: &Statement) -> Result<Statement, Error>;
-    fn traverse_assignment(&mut self, assignment: &Assignment) -> Result<Assignment, Error>;
-    fn traverse_create_table(&mut self, create_table: &Statement) -> Result<Statement, Error>;
-    fn traverse_create_index(&mut self, create_index: &Statement) -> Result<Statement, Error>;
-    fn traverse_insert(&mut self, insert: &Statement) -> Result<Statement, Error>;
-    fn traverse_on_insert(
-        &mut self,
-        on_insert: &Option<OnInsert>,
-    ) -> Result<Option<OnInsert>, Error>;
-    fn traverse_on_conflict(&mut self, on_conflict: &OnConflict) -> Result<OnConflict, Error>;
-    fn traverse_ast_query(&mut self, query: &Box<ast::Query>) -> Result<Box<ast::Query>, Error>;
-    fn traverse_offset(&mut self, offset: &Offset) -> Result<Offset, Error>;
-    fn traverse_order_by_expr(&mut self, expr: &OrderByExpr) -> Result<OrderByExpr, Error>;
-    fn traverse_set_expr(&mut self, body: &SetExpr) -> Result<SetExpr, Error>;
-    fn traverse_set_operation(&mut self, body: &SetExpr) -> Result<SetExpr, Error>;
+    fn traverse(&mut self, ast: &mut Vec<Statement>) -> TraversalResult;
+    fn traverse_statement(&mut self, statement: &mut Statement) -> TraversalResult;
+    fn traverse_drop(&mut self, drop: &mut Statement) -> TraversalResult;
+    fn traverse_update(&mut self, update: &mut Statement) -> TraversalResult;
+    fn traverse_assignment(&mut self, assignment: &mut Assignment) -> TraversalResult;
+    fn traverse_create_table(&mut self, create_table: &mut Statement) -> TraversalResult;
+    fn traverse_create_index(&mut self, create_index: &mut Statement) -> TraversalResult;
+    fn traverse_insert(&mut self, insert: &mut Statement) -> TraversalResult;
+    fn traverse_on_insert(&mut self, on_insert: &mut Option<OnInsert>) -> TraversalResult;
+    fn traverse_on_conflict(&mut self, on_conflict: &mut OnConflict) -> TraversalResult;
+    fn traverse_ast_query(&mut self, query: &mut Box<ast::Query>) -> TraversalResult;
+    fn traverse_offset(&mut self, offset: &mut Offset) -> TraversalResult;
+    fn traverse_order_by_expr(&mut self, expr: &mut OrderByExpr) -> TraversalResult;
+    fn traverse_set_expr(&mut self, body: &mut SetExpr) -> TraversalResult;
+    fn traverse_set_operation(&mut self, body: &mut SetExpr) -> TraversalResult;
     fn traverse_table_with_joins(
         &mut self,
-        table_with_joins: &TableWithJoins,
-    ) -> Result<TableWithJoins, Error>;
-    fn traverse_join(&mut self, join: &Join) -> Result<Join, Error>;
-    fn traverse_join_operator(
-        &mut self,
-        join_operator: &JoinOperator,
-    ) -> Result<JoinOperator, Error>;
-    fn traverse_join_constraint(
-        &mut self,
-        constraint: &JoinConstraint,
-    ) -> Result<JoinConstraint, Error>;
-    fn traverse_table_factor(&mut self, relation: &TableFactor) -> Result<TableFactor, Error>;
-    fn traverse_table_factor_derived(
-        &mut self,
-        relation: &TableFactor,
-    ) -> Result<TableFactor, Error>;
-    fn traverse_select_tables(
-        &mut self,
-        tables: &Vec<TableWithJoins>,
-    ) -> Result<Vec<TableWithJoins>, Error>;
-    fn traverse_select(&mut self, select: &Box<Select>) -> Result<Box<Select>, Error>;
-    fn traverse_select_item(&mut self, select_item: &SelectItem) -> Result<SelectItem, Error>;
-    fn traverse_expr(&mut self, expr: &Expr) -> Result<Expr, Error>;
-    fn traverse_in_subquery(&mut self, in_subquery: &Expr) -> Result<Expr, Error>;
-    fn traverse_function(&mut self, func: &Function) -> Result<Function, Error>;
-    fn traverse_function_arg(&mut self, function_arg: &FunctionArg) -> Result<FunctionArg, Error>;
+        table_with_joins: &mut TableWithJoins,
+    ) -> TraversalResult;
+    fn traverse_join(&mut self, join: &mut Join) -> TraversalResult;
+    fn traverse_join_operator(&mut self, join_operator: &mut JoinOperator) -> TraversalResult;
+    fn traverse_join_constraint(&mut self, constraint: &mut JoinConstraint) -> TraversalResult;
+    fn traverse_table_factor(&mut self, relation: &mut TableFactor) -> TraversalResult;
+    fn traverse_table_factor_derived(&mut self, relation: &mut TableFactor) -> TraversalResult;
+    fn traverse_select_tables(&mut self, tables: &mut Vec<TableWithJoins>) -> TraversalResult;
+    fn traverse_select(&mut self, select: &mut Box<Select>) -> TraversalResult;
+    fn traverse_select_item(&mut self, select_item: &mut SelectItem) -> TraversalResult;
+    fn traverse_expr(&mut self, expr: &mut Expr) -> TraversalResult;
+    fn traverse_in_subquery(&mut self, in_subquery: &mut Expr) -> TraversalResult;
+    fn traverse_function(&mut self, func: &mut Function) -> TraversalResult;
+    fn traverse_function_arg(&mut self, function_arg: &mut FunctionArg) -> TraversalResult;
     fn traverse_function_arg_expr(
         &mut self,
-        function_arg_expr: &FunctionArgExpr,
-    ) -> Result<FunctionArgExpr, Error>;
+        function_arg_expr: &mut FunctionArgExpr,
+    ) -> TraversalResult;
     fn traverse_wildcard_additional_options(
         &mut self,
-        wildcard_additional_options: &WildcardAdditionalOptions,
-    ) -> Result<WildcardAdditionalOptions, Error>;
-    fn traverse_value(&mut self, value: &Value) -> Result<Value, Error>;
+        wildcard_additional_options: &mut WildcardAdditionalOptions,
+    ) -> TraversalResult;
+    fn traverse_value(&mut self, value: &mut Value) -> TraversalResult;
 }
 
 pub struct PathConvertor {
@@ -102,14 +89,14 @@ impl SqlAstTraverser<String> for PathConvertor {
         }
     }
 
-    fn traverse_statement(&mut self, statement: Statement) -> Result<Statement, String> {
+    fn traverse_statement(&mut self, statement: &mut Statement) -> TraversalResult {
         match statement {
-            CreateTable { .. } => self.traverse_create_table(&statement),
-            CreateIndex { .. } => self.traverse_create_index(&statement),
-            Insert { .. } => self.traverse_insert(&statement),
-            Statement::Update { .. } => self.traverse_update(&statement),
-            Statement::Query(query) => Ok(Statement::Query(self.traverse_ast_query(&query)?)),
-            Statement::Drop { .. } => self.traverse_drop(&statement),
+            CreateTable { .. } => self.traverse_create_table(statement),
+            CreateIndex { .. } => self.traverse_create_index(statement),
+            Insert { .. } => self.traverse_insert(statement),
+            Statement::Update { .. } => self.traverse_update(statement),
+            Statement::Query(query) => self.traverse_ast_query(query),
+            Statement::Drop { .. } => self.traverse_drop(statement),
 
             Statement::Analyze { .. } => Err("not implemented: Statement::Analyze".to_string()),
             Statement::Truncate { .. } => Err("not implemented: Statement::Truncate".to_string()),
@@ -246,17 +233,17 @@ impl SqlAstTraverser<String> for PathConvertor {
         }
     }
 
-    fn traverse(&mut self, ast: Vec<Statement>) -> Result<Vec<Statement>, String> {
+    fn traverse(&mut self, ast: &mut Vec<Statement>) -> TraversalResult {
         ast.into_iter()
             .map(|s| self.traverse_statement(s))
             .collect()
     }
 
-    fn traverse_drop(&mut self, drop: &Statement) -> Result<Statement, String> {
+    fn traverse_drop(&mut self, drop: &mut Statement) -> TraversalResult {
         match drop {
             Statement::Drop {
                 cascade,
-                if_exists,
+                if_exists: _,
                 names,
                 object_type,
                 purge,
@@ -308,23 +295,17 @@ impl SqlAstTraverser<String> for PathConvertor {
                     })
                     .collect::<Result<Vec<_>, String>>()?;
 
-                Ok(Statement::Drop {
-                    cascade: false,
-                    if_exists: *if_exists,
-                    names: new_names,
-                    object_type: ObjectType::Table,
-                    purge: false,
-                    restrict: false,
-                    temporary: false,
-                })
+                *names = new_names;
             }
             _ => {
                 unreachable!("Expected a Drop statement")
             }
         }
+
+        Ok(())
     }
 
-    fn traverse_update(&mut self, update: &Statement) -> Result<Statement, String> {
+    fn traverse_update(&mut self, update: &mut Statement) -> TraversalResult {
         match update {
             Statement::Update {
                 assignments,
@@ -339,66 +320,55 @@ impl SqlAstTraverser<String> for PathConvertor {
 
                 self.scopes.push(Scope::new());
 
-                let new_table = self.traverse_table_with_joins(table)?;
+                self.traverse_table_with_joins(table)?;
 
-                let new_from = from
-                    .as_ref()
+                from.as_mut()
                     .map(|f| self.traverse_table_with_joins(f))
                     .transpose()?;
 
-                let new_assignments = assignments
-                    .iter()
+                assignments
+                    .iter_mut()
                     .map(|assignment| self.traverse_assignment(assignment))
                     .collect::<Result<Vec<_>, _>>()?;
 
-                let new_selection = selection
-                    .as_ref()
+                selection
+                    .as_mut()
                     .map(|s| self.traverse_expr(s))
                     .transpose()?;
 
                 self.scopes.pop();
-
-                Ok(Statement::Update {
-                    assignments: new_assignments,
-                    from: new_from,
-                    selection: new_selection,
-                    table: new_table,
-
-                    returning: None,
-                })
             }
             _ => {
                 unreachable!("Expected an Update statement");
             }
         }
+
+        Ok(())
     }
 
     fn traverse_assignment(
         &mut self,
-        Assignment { id, value }: &Assignment,
-    ) -> Result<Assignment, String> {
-        let new_value = self.traverse_expr(value)?;
+        Assignment { id, value }: &mut Assignment,
+    ) -> TraversalResult {
+        self.traverse_expr(value)?;
 
         extract_unary_identifier(id, "column")?;
 
-        Ok(Assignment {
-            id: id.clone(),
-            value: new_value,
-        })
+        Ok(())
     }
 
-    fn traverse_create_table(&mut self, create_table: &Statement) -> Result<Statement, String> {
+    fn traverse_create_table(&mut self, create_table: &mut Statement) -> TraversalResult {
         if let CreateTable {
-            if_not_exists,
+            if_not_exists: _,
             name,
-            columns,
-            auto_increment_offset,
+            columns: _,
+            auto_increment_offset: _,
             clone,
             cluster_by,
-            collation,
+            collation: _,
             comment,
             constraints,
-            default_charset,
+            default_charset: _,
             engine,
             external,
             file_format,
@@ -410,11 +380,11 @@ impl SqlAstTraverser<String> for PathConvertor {
             on_cluster,
             on_commit,
             options,
-            or_replace,
+            or_replace: _,
             order_by,
             partition_by,
             query,
-            strict,
+            strict: _,
             table_properties,
             temporary,
             transient,
@@ -523,55 +493,24 @@ impl SqlAstTraverser<String> for PathConvertor {
 
             let db_reference = convert_path_to_database(name, &mut self.database_names)?;
 
-            Ok(CreateTable {
-                auto_increment_offset: *auto_increment_offset,
-                collation: collation.clone(),
-                columns: columns.clone(),
-                default_charset: default_charset.clone(),
-                if_not_exists: *if_not_exists,
-                name: ObjectName(get_qualified_values_table_identifiers(&db_reference)),
-                or_replace: *or_replace,
-                strict: *strict,
-
-                clone: None,
-                cluster_by: None,
-                comment: None,
-                constraints: vec![],
-                engine: None,
-                external: false,
-                file_format: None,
-                global: None,
-                hive_distribution: HiveDistributionStyle::NONE,
-                hive_formats: None,
-                like: None,
-                location: None,
-                on_cluster: None,
-                on_commit: None,
-                options: None,
-                order_by: None,
-                partition_by: None,
-                query: None,
-                table_properties: vec![],
-                temporary: false,
-                transient: false,
-                with_options: vec![],
-                without_rowid: false,
-            })
+            *name = ObjectName(get_qualified_values_table_identifiers(&db_reference));
         } else {
             unreachable!("Expected a CreateTable statement");
-        }
+        };
+
+        Ok(())
     }
 
-    fn traverse_create_index(&mut self, create_index: &Statement) -> Result<Statement, String> {
+    fn traverse_create_index(&mut self, create_index: &mut Statement) -> TraversalResult {
         match create_index {
             CreateIndex { name: None, .. } => Err("Index name is required")?,
             CreateIndex {
                 columns,
-                name: Some(ObjectName(name_identifiers)),
+                name,
                 table_name,
-                unique,
-                if_not_exists,
-                nulls_distinct,
+                unique: _,
+                if_not_exists: _,
+                nulls_distinct: _,
                 concurrently,
                 include,
                 predicate,
@@ -593,52 +532,44 @@ impl SqlAstTraverser<String> for PathConvertor {
                     return Err("not implemented: CreateIndex::using".to_string());
                 }
 
+                let ObjectName(name_identifiers) = name.as_ref().unwrap();
+
                 let index_name = extract_unary_identifier(name_identifiers, "index")?;
 
                 let translated_db_name =
                     convert_path_to_database(table_name, &mut self.database_names)?;
 
-                let new_columns = columns
-                    .iter()
+                columns
+                    .iter_mut()
                     .map(|c| self.traverse_order_by_expr(c))
                     .collect::<Result<Vec<_>, _>>()?;
 
-                Ok(CreateIndex {
-                    columns: new_columns,
-                    if_not_exists: *if_not_exists,
-                    name: Some(ObjectName(vec![
-                        Ident::new(translated_db_name),
-                        Ident::new(format!("{}{}", VALUES_TABLE_INDEX_PREFIX, index_name)),
-                    ])),
-                    nulls_distinct: *nulls_distinct,
-                    table_name: ObjectName(vec![Ident::new(VALUES_TABLE_NAME)]),
-                    unique: *unique,
-
-                    // Not handled
-                    concurrently: false,
-                    include: vec![],
-                    predicate: None,
-                    using: None,
-                })
+                *name = Some(ObjectName(vec![
+                    Ident::new(translated_db_name),
+                    Ident::new(format!("{}{}", VALUES_TABLE_INDEX_PREFIX, index_name)),
+                ]));
+                *table_name = ObjectName(vec![Ident::new(VALUES_TABLE_NAME)]);
             }
             _ => {
                 unreachable!("Expected a CreateIndex statement");
             }
-        }
+        };
+
+        Ok(())
     }
 
-    fn traverse_insert(&mut self, insert: &Statement) -> Result<Statement, String> {
+    fn traverse_insert(&mut self, insert: &mut Statement) -> TraversalResult {
         match insert {
             Insert {
-                columns,
+                columns: _,
                 table_name,
-                table_alias,
-                ignore,
-                into,
-                or,
-                overwrite,
-                replace_into,
-                table,
+                table_alias: _,
+                ignore: _,
+                into: _,
+                or: _,
+                overwrite: _,
+                replace_into: _,
+                table: _,
                 source,
                 after_columns,
                 on,
@@ -665,55 +596,34 @@ impl SqlAstTraverser<String> for PathConvertor {
                 let translated_db_name =
                     convert_path_to_database(table_name, &mut self.database_names)?;
 
-                let new_source = source
-                    .as_ref()
+                source
+                    .as_mut()
                     .map(|s| self.traverse_ast_query(s))
-                    .transpose()?;
+                    .unwrap_or(Ok(()))?;
 
-                let new_on = self.traverse_on_insert(on)?;
+                self.traverse_on_insert(on)?;
 
-                Ok(Insert {
-                    after_columns: vec![],
-                    columns: columns.clone(),
-                    ignore: *ignore,
-                    into: *into,
-                    on: new_on,
-                    or: *or,
-                    overwrite: *overwrite,
-                    replace_into: *replace_into,
-                    source: new_source,
-                    table_alias: table_alias.clone(),
-                    table_name: ObjectName(get_qualified_values_table_identifiers(
-                        &translated_db_name,
-                    )),
-                    table: *table,
-
-                    partitioned: None,
-                    priority: None,
-                    returning: None,
-                })
+                *table_name =
+                    ObjectName(get_qualified_values_table_identifiers(&translated_db_name));
             }
             _ => {
                 unreachable!("Expected an Insert statement");
             }
-        }
+        };
+
+        Ok(())
     }
 
-    fn traverse_on_insert(
-        &mut self,
-        on_insert: &Option<OnInsert>,
-    ) -> Result<Option<OnInsert>, String> {
+    fn traverse_on_insert(&mut self, on_insert: &mut Option<OnInsert>) -> TraversalResult {
         match on_insert {
-            Some(OnInsert::OnConflict(on_conflict)) => Ok(Some(OnInsert::OnConflict(
-                self.traverse_on_conflict(on_conflict)?,
-            ))),
-            None => Ok(None),
+            Some(OnInsert::OnConflict(on_conflict)) => self.traverse_on_conflict(on_conflict),
+            None => Ok(()),
 
             Some(OnInsert::DuplicateKeyUpdate(..)) => {
                 Err("not implemented: OnInsert::DuplicateKeyUpdate".to_string())
             }
 
-            &Some(_) => Err("Unrecognized OnInsert variant".to_string()),
+            &mut Some(_) => Err("Unrecognized OnInsert variant".to_string()),
         }
     }
 
@@ -722,17 +632,14 @@ impl SqlAstTraverser<String> for PathConvertor {
         OnConflict {
             action,
             conflict_target,
-        }: &OnConflict,
-    ) -> Result<OnConflict, String> {
+        }: &mut OnConflict,
+    ) -> TraversalResult {
         if conflict_target.is_some() {
             return Err("not implemented: OnConflict::conflict_target".to_string());
         }
 
         match action {
-            OnConflictAction::DoNothing => Ok(OnConflict {
-                action: OnConflictAction::DoNothing,
-                conflict_target: None,
-            }),
+            OnConflictAction::DoNothing => Ok(()),
 
             OnConflictAction::DoUpdate(_) => {
                 Err("not implemented: OnConflictAction::DoUpdate".to_string())
@@ -740,7 +647,7 @@ impl SqlAstTraverser<String> for PathConvertor {
         }
     }
 
-    fn traverse_ast_query(&mut self, query: &Box<ast::Query>) -> Result<Box<ast::Query>, String> {
+    fn traverse_ast_query(&mut self, query: &mut Box<ast::Query>) -> TraversalResult {
         let ast::Query {
             body,
             fetch,
@@ -751,7 +658,7 @@ impl SqlAstTraverser<String> for PathConvertor {
             offset,
             order_by,
             with,
-        } = query.as_ref();
+        } = query.as_mut();
 
         if fetch.is_some() {
             return Err("not implemented: ast::Query::fetch".to_string());
@@ -775,79 +682,57 @@ impl SqlAstTraverser<String> for PathConvertor {
 
         self.scopes.push(Scope::new());
 
-        let new_body = self.traverse_set_expr(body)?;
+        self.traverse_set_expr(body)?;
 
-        let new_order_by = order_by
-            .iter()
+        order_by
+            .iter_mut()
             .map(|expr| self.traverse_order_by_expr(expr))
             .collect::<Result<Vec<_>, _>>()?;
 
-        let new_offset = offset
-            .as_ref()
+        offset
+            .as_mut()
             .map(|o| self.traverse_offset(o))
             .transpose()?;
 
-        let new_limit = limit.as_ref().map(|l| self.traverse_expr(l)).transpose()?;
+        limit.as_mut().map(|l| self.traverse_expr(l)).transpose()?;
 
         self.scopes.pop();
 
-        Ok(Box::new(ast::Query {
-            body: Box::new(new_body),
-            limit: new_limit,
-            order_by: new_order_by,
-            offset: new_offset,
-
-            fetch: None,
-            for_clause: None,
-            limit_by: vec![],
-            locks: vec![],
-            with: None,
-        }))
+        Ok(())
     }
 
-    fn traverse_offset(&mut self, Offset { value, rows }: &Offset) -> Result<Offset, String> {
-        Ok(Offset {
-            rows: *rows,
-            value: self.traverse_expr(value)?,
-        })
+    fn traverse_offset(&mut self, Offset { value, rows: _ }: &mut Offset) -> TraversalResult {
+        self.traverse_expr(value)
     }
 
-    fn traverse_order_by_expr(&mut self, expr: &OrderByExpr) -> Result<OrderByExpr, String> {
+    fn traverse_order_by_expr(&mut self, expr: &mut OrderByExpr) -> TraversalResult {
         match expr {
             OrderByExpr {
                 expr,
-                asc,
-                nulls_first,
-            } => {
-                let new_expr = self.traverse_expr(expr)?;
-
-                Ok(OrderByExpr {
-                    expr: new_expr,
-                    asc: *asc,
-                    nulls_first: *nulls_first,
-                })
-            }
+                asc: _,
+                nulls_first: _,
+            } => self.traverse_expr(expr),
         }
     }
 
-    fn traverse_set_expr(&mut self, body: &SetExpr) -> Result<SetExpr, String> {
+    fn traverse_set_expr(&mut self, body: &mut SetExpr) -> TraversalResult {
         match body {
-            SetExpr::Values(Values { explicit_row, rows }) => Ok(SetExpr::Values(Values {
-                explicit_row: *explicit_row,
-                rows: rows
-                    .into_iter()
+            SetExpr::Values(Values {
+                explicit_row: _,
+                rows,
+            }) => {
+                rows.into_iter()
                     .map(|row| {
                         row.into_iter()
                             .map(|expr| self.traverse_expr(expr))
                             .collect::<Result<Vec<_>, _>>()
                             .map_err(|e| e.to_string())
                     })
-                    .collect::<Result<Vec<_>, _>>()?,
-            })),
-            SetExpr::Select(select) => {
-                let new_select = self.traverse_select(select)?;
-                Ok(SetExpr::Select(new_select))
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                Ok(())
             }
+            SetExpr::Select(select) => self.traverse_select(select),
             SetExpr::SetOperation { .. } => self.traverse_set_operation(body),
 
             SetExpr::Query(_) => Err("not implemented: SetExpr::Query".to_string()),
@@ -857,28 +742,23 @@ impl SqlAstTraverser<String> for PathConvertor {
         }
     }
 
-    fn traverse_set_operation(&mut self, body: &SetExpr) -> Result<SetExpr, String> {
+    fn traverse_set_operation(&mut self, body: &mut SetExpr) -> TraversalResult {
         match body {
             SetExpr::SetOperation {
                 left,
-                op,
+                op: _,
                 right,
-                set_quantifier,
+                set_quantifier: _,
             } => {
                 self.scopes.push(Scope::new());
-                let new_left = self.traverse_set_expr(left)?;
+                self.traverse_set_expr(left)?;
                 self.scopes.pop();
 
                 self.scopes.push(Scope::new());
-                let new_right = self.traverse_set_expr(right)?;
+                self.traverse_set_expr(right)?;
                 self.scopes.pop();
 
-                Ok(SetExpr::SetOperation {
-                    left: Box::new(new_left),
-                    op: *op,
-                    right: Box::new(new_right),
-                    set_quantifier: *set_quantifier,
-                })
+                Ok(())
             }
             _ => {
                 unreachable!("Expected a SetOperation SetExpr");
@@ -888,99 +768,59 @@ impl SqlAstTraverser<String> for PathConvertor {
 
     fn traverse_table_with_joins(
         &mut self,
-        TableWithJoins { relation, joins }: &TableWithJoins,
-    ) -> Result<TableWithJoins, String> {
-        let new_relation = self.traverse_table_factor(relation)?;
+        TableWithJoins { relation, joins }: &mut TableWithJoins,
+    ) -> TraversalResult {
+        self.traverse_table_factor(relation)?;
 
-        let new_join = joins
-            .iter()
+        joins
+            .iter_mut()
             .map(|join| self.traverse_join(join))
             .collect::<Result<Vec<_>, _>>()?;
 
-        Ok(TableWithJoins {
-            relation: new_relation,
-            joins: new_join,
-        })
+        Ok(())
     }
 
-    fn traverse_join(&mut self, join: &Join) -> Result<Join, String> {
+    fn traverse_join(&mut self, join: &mut Join) -> TraversalResult {
         match join {
             Join {
                 join_operator,
                 relation,
             } => {
-                let new_relation = self.traverse_table_factor(relation)?;
+                self.traverse_table_factor(relation)?;
 
-                let new_join_operator = self.traverse_join_operator(join_operator)?;
-
-                Ok(Join {
-                    join_operator: new_join_operator,
-                    relation: new_relation,
-                })
+                self.traverse_join_operator(join_operator)
             }
         }
     }
 
-    fn traverse_join_operator(
-        &mut self,
-        join_operator: &JoinOperator,
-    ) -> Result<JoinOperator, String> {
+    fn traverse_join_operator(&mut self, join_operator: &mut JoinOperator) -> TraversalResult {
         match join_operator {
-            JoinOperator::Inner(constraint) => {
-                let new_constraint = self.traverse_join_constraint(constraint)?;
-                Ok(JoinOperator::Inner(new_constraint))
-            }
-            JoinOperator::LeftOuter(constraint) => {
-                let new_constraint = self.traverse_join_constraint(constraint)?;
-                Ok(JoinOperator::LeftOuter(new_constraint))
-            }
-            JoinOperator::RightOuter(constraint) => {
-                let new_constraint = self.traverse_join_constraint(constraint)?;
-                Ok(JoinOperator::RightOuter(new_constraint))
-            }
-            JoinOperator::FullOuter(constraint) => {
-                let new_constraint = self.traverse_join_constraint(constraint)?;
-                Ok(JoinOperator::FullOuter(new_constraint))
-            }
-            JoinOperator::CrossJoin => Ok(JoinOperator::CrossJoin),
-            JoinOperator::LeftSemi(constraint) => {
-                let new_constraint = self.traverse_join_constraint(constraint)?;
-                Ok(JoinOperator::LeftSemi(new_constraint))
-            }
-            JoinOperator::RightSemi(constraint) => {
-                let new_constraint = self.traverse_join_constraint(constraint)?;
-                Ok(JoinOperator::RightSemi(new_constraint))
-            }
-            JoinOperator::LeftAnti(constraint) => {
-                let new_constraint = self.traverse_join_constraint(constraint)?;
-                Ok(JoinOperator::LeftAnti(new_constraint))
-            }
-            JoinOperator::RightAnti(constraint) => {
-                let new_constraint = self.traverse_join_constraint(constraint)?;
-                Ok(JoinOperator::RightAnti(new_constraint))
-            }
-            JoinOperator::CrossApply => Ok(JoinOperator::CrossApply),
-            JoinOperator::OuterApply => Ok(JoinOperator::OuterApply),
+            JoinOperator::Inner(constraint) => self.traverse_join_constraint(constraint),
+            JoinOperator::LeftOuter(constraint) => self.traverse_join_constraint(constraint),
+            JoinOperator::RightOuter(constraint) => self.traverse_join_constraint(constraint),
+            JoinOperator::FullOuter(constraint) => self.traverse_join_constraint(constraint),
+            JoinOperator::LeftSemi(constraint) => self.traverse_join_constraint(constraint),
+            JoinOperator::RightSemi(constraint) => self.traverse_join_constraint(constraint),
+            JoinOperator::LeftAnti(constraint) => self.traverse_join_constraint(constraint),
+            JoinOperator::RightAnti(constraint) => self.traverse_join_constraint(constraint),
+
+            JoinOperator::CrossApply => Ok(()),
+            JoinOperator::CrossJoin => Ok(()),
+            JoinOperator::OuterApply => Ok(()),
         }
     }
 
-    fn traverse_join_constraint(
-        &mut self,
-        constraint: &JoinConstraint,
-    ) -> Result<JoinConstraint, String> {
+    fn traverse_join_constraint(&mut self, constraint: &mut JoinConstraint) -> TraversalResult {
         match constraint {
-            JoinConstraint::On(expr) => {
-                let new_expr = self.traverse_expr(expr)?;
-                Ok(JoinConstraint::On(new_expr))
-            }
-            JoinConstraint::Natural => Ok(JoinConstraint::Natural),
-            JoinConstraint::None => Ok(JoinConstraint::None),
+            JoinConstraint::On(expr) => self.traverse_expr(expr),
+            JoinConstraint::Natural => Ok(()),
+            JoinConstraint::None => Ok(()),
 
             JoinConstraint::Using(_) => Err("not implemented: JoinConstraint::Using".to_string()),
         }
     }
 
-    fn traverse_table_factor(&mut self, relation: &TableFactor) -> Result<TableFactor, String> {
+    fn traverse_table_factor(&mut self, relation: &mut TableFactor) -> TraversalResult {
         match relation {
             TableFactor::Table {
                 alias,
@@ -1020,15 +860,9 @@ impl SqlAstTraverser<String> for PathConvertor {
                     &mut scope.referencable_tables,
                 )?;
 
-                Ok(TableFactor::Table {
-                    alias: alias.clone(),
-                    name: ObjectName(get_qualified_values_table_identifiers(&db_reference)),
+                *table_name = ObjectName(get_qualified_values_table_identifiers(&db_reference));
 
-                    args: None,
-                    partitions: vec![],
-                    version: None,
-                    with_hints: vec![],
-                })
+                Ok(())
             }
             TableFactor::Derived { .. } => self.traverse_table_factor_derived(relation),
 
@@ -1050,17 +884,14 @@ impl SqlAstTraverser<String> for PathConvertor {
         }
     }
 
-    fn traverse_table_factor_derived(
-        &mut self,
-        relation: &TableFactor,
-    ) -> Result<TableFactor, String> {
+    fn traverse_table_factor_derived(&mut self, relation: &mut TableFactor) -> TraversalResult {
         match relation {
             TableFactor::Derived {
-                lateral,
+                lateral: _,
                 subquery,
                 alias,
             } => {
-                let new_subquery = self.traverse_ast_query(subquery)?;
+                self.traverse_ast_query(subquery)?;
 
                 let scope = self
                     .scopes
@@ -1073,32 +904,25 @@ impl SqlAstTraverser<String> for PathConvertor {
                     &mut self.database_names,
                     &mut scope.referencable_tables,
                 )?;
-
-                Ok(TableFactor::Derived {
-                    lateral: *lateral,
-                    subquery: new_subquery,
-                    alias: alias.clone(),
-                })
             }
             _ => {
                 unreachable!("Expected a Derived TableFactor");
             }
-        }
+        };
+
+        Ok(())
     }
 
-    fn traverse_select_tables(
-        &mut self,
-        tables: &Vec<TableWithJoins>,
-    ) -> Result<Vec<TableWithJoins>, String> {
-        let new_tables = tables
-            .iter()
+    fn traverse_select_tables(&mut self, tables: &mut Vec<TableWithJoins>) -> TraversalResult {
+        tables
+            .iter_mut()
             .map(|t| self.traverse_table_with_joins(t))
-            .collect::<Result<Vec<TableWithJoins>, String>>()?;
+            .collect::<Result<Vec<_>, String>>()?;
 
-        Ok(new_tables)
+        Ok(())
     }
 
-    fn traverse_select(&mut self, select: &Box<Select>) -> Result<Box<Select>, String> {
+    fn traverse_select(&mut self, select: &mut Box<Select>) -> TraversalResult {
         let Select {
             cluster_by,
             distinct,
@@ -1114,7 +938,7 @@ impl SqlAstTraverser<String> for PathConvertor {
             selection,
             sort_by,
             top,
-        } = select.as_ref();
+        } = select.as_mut();
 
         if !cluster_by.is_empty() {
             return Err("not implemented: Select::cluster_by".to_string());
@@ -1157,64 +981,37 @@ impl SqlAstTraverser<String> for PathConvertor {
             return Err("not implemented: Select::top".to_string());
         }
 
-        let new_from = self.traverse_select_tables(from)?;
+        self.traverse_select_tables(from)?;
 
-        let new_projection = projection
-            .iter()
+        projection
+            .iter_mut()
             .map(|item| self.traverse_select_item(item))
             .collect::<Result<Vec<_>, _>>()?;
 
-        let new_selection = selection
-            .as_ref()
+        selection
+            .as_mut()
             .map(|expr| self.traverse_expr(expr))
             .transpose()?;
 
-        let new_group_by = match group_by {
+        match group_by {
             GroupByExpr::Expressions(expressions) => {
-                let new_expressions = expressions
-                    .iter()
+                expressions
+                    .iter_mut()
                     .map(|expr| self.traverse_expr(expr))
                     .collect::<Result<Vec<_>, _>>()?;
-
-                GroupByExpr::Expressions(new_expressions)
             }
             GroupByExpr::All => return Err("not implemented: GroupByExpr::All".to_string()),
         };
 
-        Ok(Box::new(Select {
-            from: new_from,
-            group_by: new_group_by,
-            projection: new_projection,
-            selection: new_selection,
-
-            cluster_by: vec![],
-            distinct: None,
-            distribute_by: vec![],
-            having: None,
-            into: None,
-            lateral_views: vec![],
-            named_window: vec![],
-            qualify: None,
-            sort_by: vec![],
-            top: None,
-        }))
+        Ok(())
     }
 
-    fn traverse_select_item(&mut self, select_item: &SelectItem) -> Result<SelectItem, String> {
+    fn traverse_select_item(&mut self, select_item: &mut SelectItem) -> TraversalResult {
         match select_item {
-            SelectItem::UnnamedExpr(expr) => Ok(SelectItem::UnnamedExpr(self.traverse_expr(expr)?)),
-            SelectItem::ExprWithAlias { expr, alias } => {
-                let new_expr = self.traverse_expr(expr)?;
-
-                Ok(SelectItem::ExprWithAlias {
-                    expr: new_expr,
-                    alias: alias.clone(),
-                })
-            }
+            SelectItem::UnnamedExpr(expr) => self.traverse_expr(expr),
+            SelectItem::ExprWithAlias { expr, alias: _ } => self.traverse_expr(expr),
             SelectItem::Wildcard(wildcard_options) => {
-                let new_wildcard_options =
-                    self.traverse_wildcard_additional_options(wildcard_options)?;
-                Ok(SelectItem::Wildcard(new_wildcard_options))
+                self.traverse_wildcard_additional_options(wildcard_options)
             }
 
             SelectItem::QualifiedWildcard(_, _) => {
@@ -1230,8 +1027,8 @@ impl SqlAstTraverser<String> for PathConvertor {
             opt_exclude,
             opt_rename,
             opt_replace,
-        }: &WildcardAdditionalOptions,
-    ) -> Result<WildcardAdditionalOptions, String> {
+        }: &mut WildcardAdditionalOptions,
+    ) -> TraversalResult {
         if opt_except.is_some() {
             return Err("not implemented: WildcardAdditionalOptions::opt_except".to_string());
         }
@@ -1248,18 +1045,13 @@ impl SqlAstTraverser<String> for PathConvertor {
             return Err("not implemented: WildcardAdditionalOptions::opt_replace".to_string());
         }
 
-        Ok(WildcardAdditionalOptions {
-            opt_except: None,
-            opt_exclude: None,
-            opt_rename: None,
-            opt_replace: None,
-        })
+        Ok(())
     }
 
-    fn traverse_expr(&mut self, expr: &Expr) -> Result<Expr, String> {
+    fn traverse_expr(&mut self, expr: &mut Expr) -> TraversalResult {
         match expr {
-            Expr::Value(value) => Ok(Expr::Value(self.traverse_value(value)?)),
-            Expr::Function(func) => Ok(Expr::Function(self.traverse_function(func)?)),
+            Expr::Value(value) => self.traverse_value(value),
+            Expr::Function(func) => self.traverse_function(func),
             Expr::CompoundIdentifier(identifiers) => {
                 let (table_reference, column_name) =
                     extract_binary_identifiers(identifiers, "expression")?;
@@ -1270,23 +1062,18 @@ impl SqlAstTraverser<String> for PathConvertor {
                 let mut new_identifiers = table_replacement_identifiers.clone();
                 new_identifiers.push(Ident::new(&column_name));
 
-                Ok(Expr::CompoundIdentifier(new_identifiers))
+                *identifiers = new_identifiers;
+
+                Ok(())
             }
-            Expr::BinaryOp { left, op, right } => {
-                let new_left = self.traverse_expr(left)?;
-                let new_right = self.traverse_expr(right)?;
-                Ok(Expr::BinaryOp {
-                    left: Box::new(new_left),
-                    op: op.clone(),
-                    right: Box::new(new_right),
-                })
+            Expr::BinaryOp { left, op: _, right } => {
+                self.traverse_expr(left)?;
+                self.traverse_expr(right)
             }
-            Expr::Identifier(_) => Ok(expr.clone()),
+            Expr::Identifier(_) => Ok(()),
             Expr::InSubquery { .. } => self.traverse_in_subquery(expr),
-            Expr::IsNull(expr) => Ok(Expr::IsNull(Box::new(self.traverse_expr(expr)?))),
-            Expr::Nested(nested_expr) => {
-                Ok(Expr::Nested(Box::new(self.traverse_expr(nested_expr)?)))
-            }
+            Expr::IsNull(expr) => self.traverse_expr(expr),
+            Expr::Nested(nested_expr) => self.traverse_expr(nested_expr),
 
             Expr::JsonAccess { .. } => Err("Unhandled syntax: Expr::JsonAccess".to_string()),
             Expr::CompositeAccess { .. } => {
@@ -1357,28 +1144,24 @@ impl SqlAstTraverser<String> for PathConvertor {
         }
     }
 
-    fn traverse_in_subquery(&mut self, in_subquery: &Expr) -> Result<Expr, String> {
+    fn traverse_in_subquery(&mut self, in_subquery: &mut Expr) -> TraversalResult {
         match in_subquery {
             Expr::InSubquery {
                 expr,
-                negated,
+                negated: _,
                 subquery,
             } => {
-                let new_expr = self.traverse_expr(expr)?;
+                self.traverse_expr(expr)?;
 
-                let new_subquery = self.traverse_ast_query(subquery)?;
-
-                Ok(Expr::InSubquery {
-                    expr: Box::new(new_expr),
-                    negated: *negated,
-                    subquery: new_subquery,
-                })
+                self.traverse_ast_query(subquery)?;
             }
             _ => unreachable!("Expected an InSubquery expression"),
         }
+
+        Ok(())
     }
 
-    fn traverse_function(&mut self, func: &Function) -> Result<Function, String> {
+    fn traverse_function(&mut self, func: &mut Function) -> TraversalResult {
         let Function {
             args,
             distinct,
@@ -1388,7 +1171,7 @@ impl SqlAstTraverser<String> for PathConvertor {
             order_by,
             over,
             // "special" apparently means the function's parentheses are omitted
-            special,
+            special: _,
         } = func;
 
         if *distinct {
@@ -1413,27 +1196,18 @@ impl SqlAstTraverser<String> for PathConvertor {
 
         validate_function_name(name)?;
 
-        Ok(Function {
-            name: name.clone(),
-            special: *special,
-            args: args
-                .into_iter()
-                .map(|arg| self.traverse_function_arg(arg))
-                .collect::<Result<Vec<_>, _>>()?,
+        args.iter_mut()
+            .map(|arg| self.traverse_function_arg(arg))
+            .collect::<Result<Vec<_>, _>>()?;
 
-            distinct: false,
-            filter: None,
-            over: None,
-            null_treatment: None,
-            order_by: vec![],
-        })
+        Ok(())
     }
 
-    fn traverse_function_arg(&mut self, function_arg: &FunctionArg) -> Result<FunctionArg, String> {
+    fn traverse_function_arg(&mut self, function_arg: &mut FunctionArg) -> TraversalResult {
         match function_arg {
-            FunctionArg::Unnamed(function_arg_expr) => Ok(FunctionArg::Unnamed(
-                self.traverse_function_arg_expr(function_arg_expr)?,
-            )),
+            FunctionArg::Unnamed(function_arg_expr) => {
+                self.traverse_function_arg_expr(function_arg_expr)
+            }
 
             FunctionArg::Named { .. } => Err("Unhandled syntax: FunctionArg::Named".to_string()),
         }
@@ -1441,11 +1215,11 @@ impl SqlAstTraverser<String> for PathConvertor {
 
     fn traverse_function_arg_expr(
         &mut self,
-        function_arg_expr: &FunctionArgExpr,
-    ) -> Result<FunctionArgExpr, String> {
+        function_arg_expr: &mut FunctionArgExpr,
+    ) -> TraversalResult {
         match function_arg_expr {
-            FunctionArgExpr::Expr(expr) => Ok(FunctionArgExpr::Expr(self.traverse_expr(expr)?)),
-            FunctionArgExpr::Wildcard => Ok(FunctionArgExpr::Wildcard),
+            FunctionArgExpr::Expr(expr) => self.traverse_expr(expr),
+            FunctionArgExpr::Wildcard => Ok(()),
 
             FunctionArgExpr::QualifiedWildcard(_) => {
                 Err("Unhandled syntax: FunctionArgExpr::QualifiedWildcard".to_string())
@@ -1453,18 +1227,18 @@ impl SqlAstTraverser<String> for PathConvertor {
         }
     }
 
-    fn traverse_value(&mut self, value: &Value) -> Result<Value, String> {
+    fn traverse_value(&mut self, value: &mut Value) -> TraversalResult {
         match value {
             Value::Placeholder(s) => {
                 if s == "?" {
-                    Ok(value.clone())
+                    Ok(())
                 } else {
                     Err(format!("Unhandled value: Value::Placeholder({})", s))
                 }
             }
-            Value::SingleQuotedString(_) => Ok(value.clone()),
-            Value::Number(_, _) => Ok(value.clone()),
-            Value::Null => Ok(value.clone()),
+            Value::SingleQuotedString(_) => Ok(()),
+            Value::Number(_, _) => Ok(()),
+            Value::Null => Ok(()),
 
             Value::DollarQuotedString(_) => {
                 Err("Unhandled value: Value::DollarQuotedString".to_string())

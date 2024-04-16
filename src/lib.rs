@@ -22,17 +22,17 @@ struct TranslatedQuery<Query> {
 fn translate_sql(query: &str) -> Result<TranslatedQuery<Vec<String>>, String> {
     let dialect = SQLiteDialect {};
 
-    let ast = Parser::parse_sql(&dialect, query).map_err(|e| e.to_string())?;
+    let mut ast = Parser::parse_sql(&dialect, query).map_err(|e| e.to_string())?;
 
     // println!("AST: {:#?}", ast);
 
     let mut path_convertor = PathConvertor::new();
 
-    let query = path_convertor.traverse(ast)?;
+    path_convertor.traverse(&mut ast)?;
 
     Ok(TranslatedQuery {
         databases: path_convertor.database_names,
-        query: query.iter().map(|s| s.to_string()).collect(),
+        query: ast.iter().map(|s| s.to_string()).collect(),
     })
 }
 
