@@ -1,8 +1,9 @@
 mod ast_views;
 
 use self::ast_views::{
-    CreateIndexStatementViewMutable, CreateTableStatementViewMutable, DropStatementViewMutable,
-    InsertStatementViewMutable, UpdateStatementViewMutable,
+    CreateIndexStatementViewMutable, CreateTableStatementViewMutable,
+    DerivedTableFactorViewMutable, DropStatementViewMutable, InSubqueryExprViewMutable,
+    InsertStatementViewMutable, SetOperationViewMutable, UpdateStatementViewMutable,
 };
 use super::{VALUES_TABLE_INDEX_PREFIX, VALUES_TABLE_NAME};
 use sqlparser::ast::{
@@ -59,7 +60,7 @@ pub trait SqlAstTraverser<Error> {
     fn traverse_offset(&mut self, offset: &mut Offset) -> TraversalResult;
     fn traverse_order_by_expr(&mut self, expr: &mut OrderByExpr) -> TraversalResult;
     fn traverse_set_expr(&mut self, body: &mut SetExpr) -> TraversalResult;
-    fn traverse_set_operation(&mut self, body: &mut SetExpr) -> TraversalResult;
+    fn traverse_set_operation(&mut self, body: SetOperationViewMutable) -> TraversalResult;
     fn traverse_table_with_joins(
         &mut self,
         table_with_joins: &mut TableWithJoins,
@@ -68,12 +69,15 @@ pub trait SqlAstTraverser<Error> {
     fn traverse_join_operator(&mut self, join_operator: &mut JoinOperator) -> TraversalResult;
     fn traverse_join_constraint(&mut self, constraint: &mut JoinConstraint) -> TraversalResult;
     fn traverse_table_factor(&mut self, relation: &mut TableFactor) -> TraversalResult;
-    fn traverse_table_factor_derived(&mut self, relation: &mut TableFactor) -> TraversalResult;
+    fn traverse_table_factor_derived(
+        &mut self,
+        relation: DerivedTableFactorViewMutable,
+    ) -> TraversalResult;
     fn traverse_select_tables(&mut self, tables: &mut Vec<TableWithJoins>) -> TraversalResult;
     fn traverse_select(&mut self, select: &mut Box<Select>) -> TraversalResult;
     fn traverse_select_item(&mut self, select_item: &mut SelectItem) -> TraversalResult;
     fn traverse_expr(&mut self, expr: &mut Expr) -> TraversalResult;
-    fn traverse_in_subquery(&mut self, in_subquery: &mut Expr) -> TraversalResult;
+    fn traverse_in_subquery(&mut self, in_subquery: InSubqueryExprViewMutable) -> TraversalResult;
     fn traverse_function(&mut self, func: &mut Function) -> TraversalResult;
     fn traverse_function_arg(&mut self, function_arg: &mut FunctionArg) -> TraversalResult;
     fn traverse_function_arg_expr(
@@ -714,7 +718,7 @@ impl SqlAstTraverser<String> for PathConvertor {
                 Ok(())
             }
             SetExpr::Select(select) => self.traverse_select(select),
-            SetExpr::SetOperation { .. } => self.traverse_set_operation(body),
+            SetExpr::SetOperation { .. } => self.traverse_set_operation(body.try_into().unwrap()),
 
             SetExpr::Query(_) => Err("not implemented: SetExpr::Query".to_string()),
             SetExpr::Insert(_) => Err("not implemented: SetExpr::Insert".to_string()),
@@ -723,28 +727,24 @@ impl SqlAstTraverser<String> for PathConvertor {
         }
     }
 
-    fn traverse_set_operation(&mut self, body: &mut SetExpr) -> TraversalResult {
-        match body {
-            SetExpr::SetOperation {
-                left,
-                op: _,
-                right,
-                set_quantifier: _,
-            } => {
-                self.scopes.push(Scope::new());
-                self.traverse_set_expr(left)?;
-                self.scopes.pop();
+    fn traverse_set_operation(
+        &mut self,
+        SetOperationViewMutable {
+            left,
+            op: _,
+            right,
+            set_quantifier: _,
+        }: SetOperationViewMutable,
+    ) -> TraversalResult {
+        self.scopes.push(Scope::new());
+        self.traverse_set_expr(left)?;
+        self.scopes.pop();
 
-                self.scopes.push(Scope::new());
-                self.traverse_set_expr(right)?;
-                self.scopes.pop();
+        self.scopes.push(Scope::new());
+        self.traverse_set_expr(right)?;
+        self.scopes.pop();
 
-                Ok(())
-            }
-            _ => {
-                unreachable!("Expected a SetOperation SetExpr");
-            }
-        }
+        Ok(())
     }
 
     fn traverse_table_with_joins(
@@ -845,7 +845,9 @@ impl SqlAstTraverser<String> for PathConvertor {
 
                 Ok(())
             }
-            TableFactor::Derived { .. } => self.traverse_table_factor_derived(relation),
+            TableFactor::Derived { .. } => {
+                self.traverse_table_factor_derived(relation.try_into().unwrap())
+            }
 
             TableFactor::TableFunction { .. } => {
                 Err("not implemented: TableFactor::TableFunction".to_string())
@@ -865,31 +867,27 @@ impl SqlAstTraverser<String> for PathConvertor {
         }
     }
 
-    fn traverse_table_factor_derived(&mut self, relation: &mut TableFactor) -> TraversalResult {
-        match relation {
-            TableFactor::Derived {
-                lateral: _,
-                subquery,
-                alias,
-            } => {
-                self.traverse_ast_query(subquery)?;
+    fn traverse_table_factor_derived(
+        &mut self,
+        DerivedTableFactorViewMutable {
+            lateral: _,
+            subquery,
+            alias,
+        }: DerivedTableFactorViewMutable,
+    ) -> TraversalResult {
+        self.traverse_ast_query(subquery)?;
 
-                let scope = self
-                    .scopes
-                    .last_mut()
-                    .ok_or("Expected scope to exist in traverse_table_factor_derived")?;
+        let scope = self
+            .scopes
+            .last_mut()
+            .ok_or("Expected scope to exist in traverse_table_factor_derived")?;
 
-                add_to_referencable_tables(
-                    &None,
-                    alias,
-                    &mut self.database_names,
-                    &mut scope.referencable_tables,
-                )?;
-            }
-            _ => {
-                unreachable!("Expected a Derived TableFactor");
-            }
-        };
+        add_to_referencable_tables(
+            &None,
+            alias,
+            &mut self.database_names,
+            &mut scope.referencable_tables,
+        )?;
 
         Ok(())
     }
@@ -1052,7 +1050,7 @@ impl SqlAstTraverser<String> for PathConvertor {
                 self.traverse_expr(right)
             }
             Expr::Identifier(_) => Ok(()),
-            Expr::InSubquery { .. } => self.traverse_in_subquery(expr),
+            Expr::InSubquery { .. } => self.traverse_in_subquery(expr.try_into().unwrap()),
             Expr::IsNull(expr) => self.traverse_expr(expr),
             Expr::Nested(nested_expr) => self.traverse_expr(nested_expr),
 
@@ -1125,19 +1123,17 @@ impl SqlAstTraverser<String> for PathConvertor {
         }
     }
 
-    fn traverse_in_subquery(&mut self, in_subquery: &mut Expr) -> TraversalResult {
-        match in_subquery {
-            Expr::InSubquery {
-                expr,
-                negated: _,
-                subquery,
-            } => {
-                self.traverse_expr(expr)?;
+    fn traverse_in_subquery(
+        &mut self,
+        InSubqueryExprViewMutable {
+            expr,
+            negated: _,
+            subquery,
+        }: InSubqueryExprViewMutable,
+    ) -> TraversalResult {
+        self.traverse_expr(expr)?;
 
-                self.traverse_ast_query(subquery)?;
-            }
-            _ => unreachable!("Expected an InSubquery expression"),
-        }
+        self.traverse_ast_query(subquery)?;
 
         Ok(())
     }

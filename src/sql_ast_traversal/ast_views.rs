@@ -1,7 +1,8 @@
 use sqlparser::ast::{
     Assignment, ColumnDef, Expr, FileFormat, HiveDistributionStyle, HiveFormat, Ident,
     MysqlInsertPriority, ObjectName, ObjectType, OnCommit, OnInsert, OrderByExpr, Query,
-    SelectItem, SqlOption, SqliteOnConflict, Statement, TableConstraint, TableWithJoins,
+    SelectItem, SetExpr, SetOperator, SetQuantifier, SqlOption, SqliteOnConflict, Statement,
+    TableAlias, TableConstraint, TableFactor, TableWithJoins,
 };
 
 #[derive(Debug)]
@@ -289,6 +290,87 @@ impl<'a> TryFrom<&'a mut Statement> for InsertStatementViewMutable<'a> {
                 table,
             }),
             _ => Err("Expected an Insert statement".to_string()),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct SetOperationViewMutable<'a> {
+    pub left: &'a mut Box<SetExpr>,
+    pub op: &'a mut SetOperator,
+    pub right: &'a mut Box<SetExpr>,
+    pub set_quantifier: &'a mut SetQuantifier,
+}
+
+impl<'a> TryFrom<&'a mut SetExpr> for SetOperationViewMutable<'a> {
+    type Error = String;
+
+    fn try_from(set_expr: &'a mut SetExpr) -> Result<Self, Self::Error> {
+        match set_expr {
+            SetExpr::SetOperation {
+                left,
+                op,
+                right,
+                set_quantifier,
+            } => Ok(SetOperationViewMutable {
+                left,
+                op,
+                right,
+                set_quantifier,
+            }),
+            _ => Err("Expected a SetOperation".to_string()),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct InSubqueryExprViewMutable<'a> {
+    pub expr: &'a mut Box<Expr>,
+    pub negated: &'a mut bool,
+    pub subquery: &'a mut Box<Query>,
+}
+
+impl<'a> TryFrom<&'a mut Expr> for InSubqueryExprViewMutable<'a> {
+    type Error = String;
+
+    fn try_from(expr: &'a mut Expr) -> Result<Self, Self::Error> {
+        match expr {
+            Expr::InSubquery {
+                expr,
+                negated,
+                subquery,
+            } => Ok(InSubqueryExprViewMutable {
+                expr,
+                negated,
+                subquery,
+            }),
+            _ => Err("Expected an InSubquery expression".to_string()),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct DerivedTableFactorViewMutable<'a> {
+    pub alias: &'a mut Option<TableAlias>,
+    pub lateral: &'a mut bool,
+    pub subquery: &'a mut Box<Query>,
+}
+
+impl<'a> TryFrom<&'a mut TableFactor> for DerivedTableFactorViewMutable<'a> {
+    type Error = String;
+
+    fn try_from(table_factor: &'a mut TableFactor) -> Result<Self, Self::Error> {
+        match table_factor {
+            TableFactor::Derived {
+                alias,
+                lateral,
+                subquery,
+            } => Ok(DerivedTableFactorViewMutable {
+                alias,
+                lateral,
+                subquery,
+            }),
+            _ => Err("Expected a DerivedTableFactor".to_string()),
         }
     }
 }
