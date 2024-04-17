@@ -1,6 +1,9 @@
 mod ast_views;
 
-use self::ast_views::DropStatementViewMutable;
+use self::ast_views::{
+    CreateIndexStatementViewMutable, CreateTableStatementViewMutable, DropStatementViewMutable,
+    InsertStatementViewMutable, UpdateStatementViewMutable,
+};
 use super::{VALUES_TABLE_INDEX_PREFIX, VALUES_TABLE_NAME};
 use sqlparser::ast::{
     self, Assignment, Expr, Function, FunctionArg, FunctionArgExpr, GroupByExpr,
@@ -39,11 +42,17 @@ pub trait SqlAstTraverser<Error> {
     fn traverse(&mut self, ast: &mut Vec<Statement>) -> TraversalResult;
     fn traverse_statement(&mut self, statement: &mut Statement) -> TraversalResult;
     fn traverse_drop(&mut self, drop: DropStatementViewMutable) -> TraversalResult;
-    fn traverse_update(&mut self, update: &mut Statement) -> TraversalResult;
+    fn traverse_update(&mut self, update: UpdateStatementViewMutable) -> TraversalResult;
     fn traverse_assignment(&mut self, assignment: &mut Assignment) -> TraversalResult;
-    fn traverse_create_table(&mut self, create_table: &mut Statement) -> TraversalResult;
-    fn traverse_create_index(&mut self, create_index: &mut Statement) -> TraversalResult;
-    fn traverse_insert(&mut self, insert: &mut Statement) -> TraversalResult;
+    fn traverse_create_table(
+        &mut self,
+        create_table: CreateTableStatementViewMutable,
+    ) -> TraversalResult;
+    fn traverse_create_index(
+        &mut self,
+        create_index: CreateIndexStatementViewMutable,
+    ) -> TraversalResult;
+    fn traverse_insert(&mut self, insert: InsertStatementViewMutable) -> TraversalResult;
     fn traverse_on_insert(&mut self, on_insert: &mut Option<OnInsert>) -> TraversalResult;
     fn traverse_on_conflict(&mut self, on_conflict: &mut OnConflict) -> TraversalResult;
     fn traverse_ast_query(&mut self, query: &mut Box<ast::Query>) -> TraversalResult;
@@ -93,10 +102,10 @@ impl SqlAstTraverser<String> for PathConvertor {
 
     fn traverse_statement(&mut self, statement: &mut Statement) -> TraversalResult {
         match statement {
-            CreateTable { .. } => self.traverse_create_table(statement),
-            CreateIndex { .. } => self.traverse_create_index(statement),
-            Insert { .. } => self.traverse_insert(statement),
-            Statement::Update { .. } => self.traverse_update(statement),
+            CreateTable { .. } => self.traverse_create_table(statement.try_into().unwrap()),
+            CreateIndex { .. } => self.traverse_create_index(statement.try_into().unwrap()),
+            Insert { .. } => self.traverse_insert(statement.try_into().unwrap()),
+            Statement::Update { .. } => self.traverse_update(statement.try_into().unwrap()),
             Statement::Query(query) => self.traverse_ast_query(query),
             Statement::Drop { .. } => self.traverse_drop(statement.try_into().unwrap()),
 
@@ -293,43 +302,37 @@ impl SqlAstTraverser<String> for PathConvertor {
         Ok(())
     }
 
-    fn traverse_update(&mut self, update: &mut Statement) -> TraversalResult {
-        match update {
-            Statement::Update {
-                assignments,
-                from,
-                returning,
-                selection,
-                table,
-            } => {
-                if returning.is_some() {
-                    return Err("not implemented: Statement::Update::returning".to_string());
-                }
-
-                self.scopes.push(Scope::new());
-
-                self.traverse_table_with_joins(table)?;
-
-                from.as_mut()
-                    .map(|f| self.traverse_table_with_joins(f))
-                    .transpose()?;
-
-                assignments
-                    .iter_mut()
-                    .map(|assignment| self.traverse_assignment(assignment))
-                    .collect::<Result<Vec<_>, _>>()?;
-
-                selection
-                    .as_mut()
-                    .map(|s| self.traverse_expr(s))
-                    .transpose()?;
-
-                self.scopes.pop();
-            }
-            _ => {
-                unreachable!("Expected an Update statement");
-            }
+    fn traverse_update(&mut self, update: UpdateStatementViewMutable) -> TraversalResult {
+        let UpdateStatementViewMutable {
+            assignments,
+            from,
+            returning,
+            selection,
+            table,
+        } = update;
+        if returning.is_some() {
+            return Err("not implemented: Statement::Update::returning".to_string());
         }
+
+        self.scopes.push(Scope::new());
+
+        self.traverse_table_with_joins(table)?;
+
+        from.as_mut()
+            .map(|f| self.traverse_table_with_joins(f))
+            .transpose()?;
+
+        assignments
+            .iter_mut()
+            .map(|assignment| self.traverse_assignment(assignment))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        selection
+            .as_mut()
+            .map(|s| self.traverse_expr(s))
+            .transpose()?;
+
+        self.scopes.pop();
 
         Ok(())
     }
@@ -345,8 +348,9 @@ impl SqlAstTraverser<String> for PathConvertor {
         Ok(())
     }
 
-    fn traverse_create_table(&mut self, create_table: &mut Statement) -> TraversalResult {
-        if let CreateTable {
+    fn traverse_create_table(
+        &mut self,
+        CreateTableStatementViewMutable {
             if_not_exists: _,
             name,
             columns: _,
@@ -378,226 +382,215 @@ impl SqlAstTraverser<String> for PathConvertor {
             transient,
             with_options,
             without_rowid,
-        } = create_table
+        }: CreateTableStatementViewMutable,
+    ) -> TraversalResult {
+        if clone.is_some() {
+            return Err("not implemented: CreateTable::clone".to_string());
+        }
+
+        if cluster_by.is_some() {
+            return Err("not implemented: CreateTable::cluster_by".to_string());
+        }
+
+        if comment.is_some() {
+            return Err("not implemented: CreateTable::comment".to_string());
+        }
+
+        if !constraints.is_empty() {
+            return Err("not implemented: CreateTable::constraints".to_string());
+        }
+
+        if engine.is_some() {
+            return Err("not implemented: CreateTable::engine".to_string());
+        }
+
+        if *external {
+            return Err("not implemented: CreateTable::external".to_string());
+        }
+
+        if file_format.is_some() {
+            return Err("not implemented: CreateTable::file_format".to_string());
+        }
+
+        if global.is_some() {
+            return Err("not implemented: CreateTable::global".to_string());
+        }
+
+        if hive_distribution != &HiveDistributionStyle::NONE {
+            return Err("not implemented: CreateTable::hive_distribution".to_string());
+        }
+
+        if let Some(HiveFormat {
+            location,
+            row_format,
+            storage,
+        }) = hive_formats
         {
-            if clone.is_some() {
-                return Err("not implemented: CreateTable::clone".to_string());
+            if location.is_some() || row_format.is_some() || storage.is_some() {
+                return Err("not implemented: CreateTable::hive_formats".to_string());
             }
+        }
 
-            if cluster_by.is_some() {
-                return Err("not implemented: CreateTable::cluster_by".to_string());
-            }
+        if like.is_some() {
+            return Err("not implemented: CreateTable::like".to_string());
+        }
 
-            if comment.is_some() {
-                return Err("not implemented: CreateTable::comment".to_string());
-            }
+        if location.is_some() {
+            return Err("not implemented: CreateTable::location".to_string());
+        }
 
-            if !constraints.is_empty() {
-                return Err("not implemented: CreateTable::constraints".to_string());
-            }
+        if on_cluster.is_some() {
+            return Err("not implemented: CreateTable::on_cluster".to_string());
+        }
 
-            if engine.is_some() {
-                return Err("not implemented: CreateTable::engine".to_string());
-            }
+        if on_commit.is_some() {
+            return Err("not implemented: CreateTable::on_commit".to_string());
+        }
 
-            if *external {
-                return Err("not implemented: CreateTable::external".to_string());
-            }
+        if options.is_some() {
+            return Err("not implemented: CreateTable::options".to_string());
+        }
 
-            if file_format.is_some() {
-                return Err("not implemented: CreateTable::file_format".to_string());
-            }
+        if order_by.is_some() {
+            return Err("not implemented: CreateTable::order_by".to_string());
+        }
 
-            if global.is_some() {
-                return Err("not implemented: CreateTable::global".to_string());
-            }
+        if partition_by.is_some() {
+            return Err("not implemented: CreateTable::partition_by".to_string());
+        }
 
-            if hive_distribution != &HiveDistributionStyle::NONE {
-                return Err("not implemented: CreateTable::hive_distribution".to_string());
-            }
+        if query.is_some() {
+            return Err("not implemented: CreateTable::query".to_string());
+        }
 
-            if let Some(HiveFormat {
-                location,
-                row_format,
-                storage,
-            }) = hive_formats
-            {
-                if location.is_some() || row_format.is_some() || storage.is_some() {
-                    return Err("not implemented: CreateTable::hive_formats".to_string());
-                }
-            }
+        if !table_properties.is_empty() {
+            return Err("not implemented: CreateTable::table_properties".to_string());
+        }
 
-            if like.is_some() {
-                return Err("not implemented: CreateTable::like".to_string());
-            }
+        if *temporary {
+            return Err("not implemented: CreateTable::temporary".to_string());
+        }
 
-            if location.is_some() {
-                return Err("not implemented: CreateTable::location".to_string());
-            }
+        if *transient {
+            return Err("not implemented CreateTable::transient".to_string());
+        }
 
-            if on_cluster.is_some() {
-                return Err("not implemented: CreateTable::on_cluster".to_string());
-            }
+        if !with_options.is_empty() {
+            return Err("not implemented: CreateTable::with_options".to_string());
+        }
 
-            if on_commit.is_some() {
-                return Err("not implemented: CreateTable::on_commit".to_string());
-            }
+        if *without_rowid {
+            return Err("not implemented: CreateTable::without_rowid".to_string());
+        }
 
-            if options.is_some() {
-                return Err("not implemented: CreateTable::options".to_string());
-            }
+        let db_reference = convert_path_to_database(name, &mut self.database_names)?;
 
-            if order_by.is_some() {
-                return Err("not implemented: CreateTable::order_by".to_string());
-            }
-
-            if partition_by.is_some() {
-                return Err("not implemented: CreateTable::partition_by".to_string());
-            }
-
-            if query.is_some() {
-                return Err("not implemented: CreateTable::query".to_string());
-            }
-
-            if !table_properties.is_empty() {
-                return Err("not implemented: CreateTable::table_properties".to_string());
-            }
-
-            if *temporary {
-                return Err("not implemented: CreateTable::temporary".to_string());
-            }
-
-            if *transient {
-                return Err("not implemented CreateTable::transient".to_string());
-            }
-
-            if !with_options.is_empty() {
-                return Err("not implemented: CreateTable::with_options".to_string());
-            }
-
-            if *without_rowid {
-                return Err("not implemented: CreateTable::without_rowid".to_string());
-            }
-
-            let db_reference = convert_path_to_database(name, &mut self.database_names)?;
-
-            *name = ObjectName(get_qualified_values_table_identifiers(&db_reference));
-        } else {
-            unreachable!("Expected a CreateTable statement");
-        };
+        *name = ObjectName(get_qualified_values_table_identifiers(&db_reference));
 
         Ok(())
     }
 
-    fn traverse_create_index(&mut self, create_index: &mut Statement) -> TraversalResult {
-        match create_index {
-            CreateIndex { name: None, .. } => Err("Index name is required")?,
-            CreateIndex {
-                columns,
-                name,
-                table_name,
-                unique: _,
-                if_not_exists: _,
-                nulls_distinct: _,
-                concurrently,
-                include,
-                predicate,
-                using,
-            } => {
-                if *concurrently {
-                    return Err("not implemented: CreateIndex::concurrently".to_string());
-                }
+    fn traverse_create_index(
+        &mut self,
+        CreateIndexStatementViewMutable {
+            columns,
+            name,
+            table_name,
+            unique: _,
+            if_not_exists: _,
+            nulls_distinct: _,
+            concurrently,
+            include,
+            predicate,
+            using,
+        }: CreateIndexStatementViewMutable,
+    ) -> TraversalResult {
+        if name.is_none() {
+            return Err("Index name is required".to_string());
+        }
 
-                if !include.is_empty() {
-                    return Err("not implemented: CreateIndex::include".to_string());
-                }
+        if *concurrently {
+            return Err("not implemented: CreateIndex::concurrently".to_string());
+        }
 
-                if predicate.is_some() {
-                    return Err("not implemented: CreateIndex::predicate".to_string());
-                }
+        if !include.is_empty() {
+            return Err("not implemented: CreateIndex::include".to_string());
+        }
 
-                if using.is_some() {
-                    return Err("not implemented: CreateIndex::using".to_string());
-                }
+        if predicate.is_some() {
+            return Err("not implemented: CreateIndex::predicate".to_string());
+        }
 
-                let ObjectName(name_identifiers) = name.as_ref().unwrap();
+        if using.is_some() {
+            return Err("not implemented: CreateIndex::using".to_string());
+        }
 
-                let index_name = extract_unary_identifier(name_identifiers, "index")?;
+        let ObjectName(name_identifiers) = name.as_ref().unwrap();
 
-                let translated_db_name =
-                    convert_path_to_database(table_name, &mut self.database_names)?;
+        let index_name = extract_unary_identifier(name_identifiers, "index")?;
 
-                columns
-                    .iter_mut()
-                    .map(|c| self.traverse_order_by_expr(c))
-                    .collect::<Result<Vec<_>, _>>()?;
+        let translated_db_name = convert_path_to_database(table_name, &mut self.database_names)?;
 
-                *name = Some(ObjectName(vec![
-                    Ident::new(translated_db_name),
-                    Ident::new(format!("{}{}", VALUES_TABLE_INDEX_PREFIX, index_name)),
-                ]));
-                *table_name = ObjectName(vec![Ident::new(VALUES_TABLE_NAME)]);
-            }
-            _ => {
-                unreachable!("Expected a CreateIndex statement");
-            }
-        };
+        columns
+            .iter_mut()
+            .map(|c| self.traverse_order_by_expr(c))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        *name = Some(ObjectName(vec![
+            Ident::new(translated_db_name),
+            Ident::new(format!("{}{}", VALUES_TABLE_INDEX_PREFIX, index_name)),
+        ]));
+        *table_name = ObjectName(vec![Ident::new(VALUES_TABLE_NAME)]);
 
         Ok(())
     }
 
-    fn traverse_insert(&mut self, insert: &mut Statement) -> TraversalResult {
-        match insert {
-            Insert {
-                columns: _,
-                table_name,
-                table_alias: _,
-                ignore: _,
-                into: _,
-                or: _,
-                overwrite: _,
-                replace_into: _,
-                table: _,
-                source,
-                after_columns,
-                on,
-                partitioned,
-                priority,
-                returning,
-            } => {
-                if !after_columns.is_empty() {
-                    return Err("not implemented: Insert::after_columns".to_string());
-                }
+    fn traverse_insert(
+        &mut self,
+        InsertStatementViewMutable {
+            columns: _,
+            table_name,
+            table_alias: _,
+            ignore: _,
+            into: _,
+            or: _,
+            overwrite: _,
+            replace_into: _,
+            table: _,
+            source,
+            after_columns,
+            on,
+            partitioned,
+            priority,
+            returning,
+        }: InsertStatementViewMutable,
+    ) -> TraversalResult {
+        if !after_columns.is_empty() {
+            return Err("not implemented: Insert::after_columns".to_string());
+        }
 
-                if partitioned.is_some() {
-                    return Err("not implemented: Insert::partitioned".to_string());
-                }
+        if partitioned.is_some() {
+            return Err("not implemented: Insert::partitioned".to_string());
+        }
 
-                if priority.is_some() {
-                    return Err("not implemented: Insert::priority".to_string());
-                }
+        if priority.is_some() {
+            return Err("not implemented: Insert::priority".to_string());
+        }
 
-                if returning.is_some() {
-                    return Err("not implemented: Insert::returning".to_string());
-                }
+        if returning.is_some() {
+            return Err("not implemented: Insert::returning".to_string());
+        }
 
-                let translated_db_name =
-                    convert_path_to_database(table_name, &mut self.database_names)?;
+        let translated_db_name = convert_path_to_database(table_name, &mut self.database_names)?;
 
-                source
-                    .as_mut()
-                    .map(|s| self.traverse_ast_query(s))
-                    .unwrap_or(Ok(()))?;
+        source
+            .as_mut()
+            .map(|s| self.traverse_ast_query(s))
+            .unwrap_or(Ok(()))?;
 
-                self.traverse_on_insert(on)?;
+        self.traverse_on_insert(on)?;
 
-                *table_name =
-                    ObjectName(get_qualified_values_table_identifiers(&translated_db_name));
-            }
-            _ => {
-                unreachable!("Expected an Insert statement");
-            }
-        };
+        *table_name = ObjectName(get_qualified_values_table_identifiers(&translated_db_name));
 
         Ok(())
     }
