@@ -217,6 +217,20 @@ pub trait VisitorMut {
         Ok(())
     }
 
+    fn pre_visit_table_factor_table(
+        &mut self,
+        _relation: &mut TableFactorTableViewMut,
+    ) -> VisitResult {
+        Ok(())
+    }
+
+    fn post_visit_table_factor_table(
+        &mut self,
+        _relation: &mut TableFactorTableViewMut,
+    ) -> VisitResult {
+        Ok(())
+    }
+
     fn pre_visit_select_tables(&mut self, _tables: &mut Vec<TableWithJoins>) -> VisitResult {
         Ok(())
     }
@@ -1341,6 +1355,8 @@ impl SqlAstTraverser<String> for PathConvertor {
         &mut self,
         relation: &mut TableFactorTableViewMut,
     ) -> TraversalResult {
+        self.visitor.pre_visit_table_factor_table(relation)?;
+
         let TableFactorTableViewMut {
             alias,
             args,
@@ -1353,12 +1369,15 @@ impl SqlAstTraverser<String> for PathConvertor {
         if args.is_some() {
             return Err("not implemented: TableFactor::Table::args".to_string());
         }
+
         if !partitions.is_empty() {
             return Err("not implemented: TableFactor::Table::partitions".to_string());
         }
+
         if version.is_some() {
             return Err("not implemented: TableFactor::Table::version".to_string());
         }
+
         if !with_hints.is_empty() {
             return Err("not implemented: TableFactor::Table::with_hints".to_string());
         }
@@ -1379,7 +1398,7 @@ impl SqlAstTraverser<String> for PathConvertor {
 
         **table_name = ObjectName(get_qualified_values_table_identifiers(&db_reference));
 
-        Ok(())
+        self.visitor.post_visit_table_factor_table(relation)
     }
 
     fn traverse_table_factor_derived(
