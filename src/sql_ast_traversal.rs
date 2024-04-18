@@ -263,6 +263,14 @@ pub trait VisitorMut {
         Ok(())
     }
 
+    fn pre_visit_compound_identifier(&mut self, _identifiers: &mut Vec<Ident>) -> VisitResult {
+        Ok(())
+    }
+
+    fn post_visit_compound_identifier(&mut self, _identifiers: &mut Vec<Ident>) -> VisitResult {
+        Ok(())
+    }
+
     fn pre_visit_in_subquery(
         &mut self,
         _in_subquery: &mut InSubqueryExprViewMutable,
@@ -594,6 +602,7 @@ pub trait SqlAstTraverser<Error> {
     fn traverse_select(&mut self, select: &mut Box<Select>) -> TraversalResult;
     fn traverse_select_item(&mut self, select_item: &mut SelectItem) -> TraversalResult;
     fn traverse_expr(&mut self, expr: &mut Expr) -> TraversalResult;
+    fn traverse_compound_identifier(&mut self, identifiers: &mut Vec<Ident>) -> TraversalResult;
     fn traverse_in_subquery(
         &mut self,
         in_subquery: &mut InSubqueryExprViewMutable,
@@ -1638,26 +1647,29 @@ impl SqlAstTraverser<String> for PathConvertor {
             .post_visit_wildcard_additional_options(wildcard_additional_options)
     }
 
+    fn traverse_compound_identifier(&mut self, identifiers: &mut Vec<Ident>) -> TraversalResult {
+        self.visitor.pre_visit_compound_identifier(identifiers)?;
+
+        let (table_reference, column_name) = extract_binary_identifiers(identifiers, "expression")?;
+
+        let table_replacement_identifiers =
+            get_replacement_identifiers_for_table(&self.scopes, &table_reference)?;
+
+        let mut new_identifiers = table_replacement_identifiers.clone();
+        new_identifiers.push(Ident::new(&column_name));
+
+        *identifiers = new_identifiers;
+
+        self.visitor.post_visit_compound_identifier(identifiers)
+    }
+
     fn traverse_expr(&mut self, expr: &mut Expr) -> TraversalResult {
         self.visitor.pre_visit_expr(expr)?;
 
         match expr {
             Expr::Value(value) => self.traverse_value(value),
             Expr::Function(func) => self.traverse_function(func),
-            Expr::CompoundIdentifier(identifiers) => {
-                let (table_reference, column_name) =
-                    extract_binary_identifiers(identifiers, "expression")?;
-
-                let table_replacement_identifiers =
-                    get_replacement_identifiers_for_table(&self.scopes, &table_reference)?;
-
-                let mut new_identifiers = table_replacement_identifiers.clone();
-                new_identifiers.push(Ident::new(&column_name));
-
-                *identifiers = new_identifiers;
-
-                Ok(())
-            }
+            Expr::CompoundIdentifier(identifiers) => self.traverse_compound_identifier(identifiers),
             Expr::BinaryOp { left, op: _, right } => {
                 self.traverse_expr(left)?;
                 self.traverse_expr(right)
