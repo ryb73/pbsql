@@ -336,6 +336,14 @@ pub trait VisitorMut {
     fn post_visit_value(&mut self, _value: &mut Value) -> VisitResult {
         Ok(())
     }
+
+    fn pre_visit_value_placeholder(&mut self, _value: &mut String) -> VisitResult {
+        Ok(())
+    }
+
+    fn post_visit_value_placeholder(&mut self, _value: &mut String) -> VisitResult {
+        Ok(())
+    }
 }
 
 pub struct MyFirstVisitor {
@@ -636,6 +644,7 @@ pub trait SqlAstTraverser<Error> {
         wildcard_additional_options: &mut WildcardAdditionalOptions,
     ) -> TraversalResult;
     fn traverse_value(&mut self, value: &mut Value) -> TraversalResult;
+    fn traverse_value_placeholder(&mut self, value: &mut String) -> TraversalResult;
 }
 
 pub struct PathConvertor {
@@ -1868,13 +1877,7 @@ impl SqlAstTraverser<String> for PathConvertor {
         self.visitor.pre_visit_value(value)?;
 
         match value {
-            Value::Placeholder(s) => {
-                if s == "?" {
-                    Ok(())
-                } else {
-                    Err(format!("Unhandled value: Value::Placeholder({})", s))
-                }
-            }
+            Value::Placeholder(s) => self.traverse_value_placeholder(s),
             Value::SingleQuotedString(_) => Ok(()),
             Value::Number(_, _) => Ok(()),
             Value::Null => Ok(()),
@@ -1912,6 +1915,18 @@ impl SqlAstTraverser<String> for PathConvertor {
 
     fn get_visitor(&mut self) -> &mut dyn VisitorMut {
         self.visitor.as_mut()
+    }
+
+    fn traverse_value_placeholder(&mut self, value: &mut String) -> TraversalResult {
+        self.visitor.pre_visit_value_placeholder(value)?;
+
+        if value == "?" {
+            Ok(())
+        } else {
+            Err(format!("Unhandled value: Value::Placeholder({})", value))
+        }?;
+
+        self.visitor.post_visit_value_placeholder(value)
     }
 }
 
