@@ -476,6 +476,63 @@ impl VisitorMut for MyFirstVisitor {
         self.scopes.pop();
         Ok(())
     }
+
+    fn post_visit_table_factor_table(
+        &mut self,
+        _relation: &mut TableFactorTableViewMut,
+    ) -> VisitResult {
+        // let TableFactorTableViewMut {
+        //     alias,
+        //     args: _,
+        //     name: table_name,
+        //     partitions: _,
+        //     version: _,
+        //     with_hints: _,
+        // } = relation;
+
+        // let db_reference = convert_path_to_database(table_name, &mut self.database_names)?;
+
+        // let scope = self
+        //     .scopes
+        //     .last_mut()
+        //     .ok_or("Expected scope to exist in traverse_table_factor")?;
+
+        // add_to_referencable_tables(
+        //     &Some(&table_name),
+        //     alias,
+        //     &mut self.database_names,
+        //     &mut scope.referencable_tables,
+        // )?;
+
+        // **table_name = ObjectName(get_qualified_values_table_identifiers(&db_reference));
+
+        Ok(())
+    }
+
+    fn post_visit_table_factor_derived(
+        &mut self,
+        relation: &mut TableFactorDerivedViewMut,
+    ) -> VisitResult {
+        let TableFactorDerivedViewMut {
+            alias,
+            lateral: _,
+            subquery: _,
+        } = relation;
+
+        let scope = self
+            .scopes
+            .last_mut()
+            .ok_or("Expected scope to exist in traverse_table_factor_derived")?;
+
+        add_to_referencable_tables(
+            &None,
+            alias,
+            &mut self.database_names,
+            &mut scope.referencable_tables,
+        )?;
+
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
