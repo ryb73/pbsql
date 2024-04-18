@@ -142,7 +142,14 @@ pub trait VisitorMut {
         Ok(())
     }
 
-    fn pre_visit_set_operation(&mut self, _body: &mut SetOperationViewMutable) -> VisitResult {
+    fn pre_visit_set_operation_left(&mut self, _body: &mut SetOperationViewMutable) -> VisitResult {
+        Ok(())
+    }
+
+    fn pre_visit_set_operation_right(
+        &mut self,
+        _body: &mut SetOperationViewMutable,
+    ) -> VisitResult {
         Ok(())
     }
 
@@ -311,17 +318,61 @@ pub trait VisitorMut {
 
 pub struct MyFirstVisitor {
     pub database_names: DatabaseNamesByPath,
+    scopes: Vec<Scope>,
 }
 
 impl MyFirstVisitor {
     pub fn new() -> Self {
         MyFirstVisitor {
             database_names: HashMap::new(),
+            scopes: vec![],
         }
     }
 }
 
 impl VisitorMut for MyFirstVisitor {
+    fn post_visit_drop(&mut self, _drop: &mut DropStatementViewMutable) -> VisitResult {
+        // let DropStatementViewMutable {
+        //     cascade: _,
+        //     if_exists: _,
+        //     names,
+        //     object_type: _,
+        //     purge: _,
+        //     restrict: _,
+        //     temporary: _,
+        // } = drop;
+
+        // let new_names = names
+        //     .iter()
+        //     .map(|name| {
+        //         let db_reference = convert_path_to_database(name, &mut self.database_names)?;
+        //         Ok(ObjectName(get_qualified_values_table_identifiers(
+        //             &db_reference,
+        //         )))
+        //     })
+        //     .collect::<Result<Vec<_>, String>>()?;
+
+        // **names = new_names;
+
+        Ok(())
+    }
+
+    fn pre_visit_update(&mut self, _update: &mut UpdateStatementViewMutable) -> VisitResult {
+        self.scopes.push(Scope::new());
+        Ok(())
+    }
+
+    fn post_visit_update(&mut self, _update: &mut UpdateStatementViewMutable) -> VisitResult {
+        self.scopes.pop();
+        Ok(())
+    }
+
+    fn post_visit_assignment(&mut self, assignment: &mut Assignment) -> VisitResult {
+        let Assignment { id, value: _ } = assignment;
+        extract_unary_identifier(id, "column")?;
+        Ok(())
+    }
+
     fn post_visit_create_table(
         &mut self,
         _create_table: &mut CreateTableStatementViewMutable,
@@ -352,6 +403,63 @@ impl VisitorMut for MyFirstVisitor {
         // ]));
         // *create_index.table_name = ObjectName(vec![Ident::new(VALUES_TABLE_NAME)]);
 
+        Ok(())
+    }
+
+    fn post_visit_insert(&mut self, _insert: &mut InsertStatementViewMutable) -> VisitResult {
+        // let InsertStatementViewMutable {
+        //     after_columns: _,
+        //     columns: _,
+        //     ignore: _,
+        //     into: _,
+        //     on: _,
+        //     or: _,
+        //     overwrite: _,
+        //     partitioned: _,
+        //     priority: _,
+        //     replace_into: _,
+        //     returning: _,
+        //     source: _,
+        //     table_alias: _,
+        //     table_name,
+        //     table: _,
+        // } = insert;
+
+        // let translated_db_name = convert_path_to_database(table_name, &mut self.database_names)?;
+
+        // -- iteration happens here --
+
+        // **table_name = ObjectName(get_qualified_values_table_identifiers(&translated_db_name));
+
+        Ok(())
+    }
+
+    fn pre_visit_ast_query(&mut self, _query: &mut Box<ast::Query>) -> VisitResult {
+        self.scopes.push(Scope::new());
+        Ok(())
+    }
+
+    fn post_visit_ast_query(&mut self, _query: &mut Box<ast::Query>) -> VisitResult {
+        self.scopes.pop();
+        Ok(())
+    }
+
+    fn pre_visit_set_operation_left(&mut self, _body: &mut SetOperationViewMutable) -> VisitResult {
+        self.scopes.push(Scope::new());
+        Ok(())
+    }
+
+    fn pre_visit_set_operation_right(
+        &mut self,
+        _body: &mut SetOperationViewMutable,
+    ) -> VisitResult {
+        self.scopes.pop();
+        self.scopes.push(Scope::new());
+        Ok(())
+    }
+
+    fn post_visit_set_operation(&mut self, _body: &mut SetOperationViewMutable) -> VisitResult {
+        self.scopes.pop();
         Ok(())
     }
 }
@@ -648,9 +756,7 @@ impl SqlAstTraverser<String> for PathConvertor {
 
         **names = new_names;
 
-        self.visitor.post_visit_drop(drop)?;
-
-        Ok(())
+        self.visitor.post_visit_drop(drop)
     }
 
     fn traverse_update(&mut self, update: &mut UpdateStatementViewMutable) -> TraversalResult {
@@ -688,23 +794,16 @@ impl SqlAstTraverser<String> for PathConvertor {
 
         self.scopes.pop();
 
-        self.visitor.post_visit_update(update)?;
-
-        Ok(())
+        self.visitor.post_visit_update(update)
     }
 
     fn traverse_assignment(&mut self, assignment: &mut Assignment) -> TraversalResult {
         self.visitor.pre_visit_assignment(assignment)?;
 
-        let Assignment { id, value } = assignment;
-
+        let Assignment { id: _, value } = assignment;
         self.traverse_expr(value)?;
 
-        extract_unary_identifier(id, "column")?;
-
-        self.visitor.post_visit_assignment(assignment)?;
-
-        Ok(())
+        self.visitor.post_visit_assignment(assignment)
     }
 
     fn traverse_create_table(
@@ -850,9 +949,7 @@ impl SqlAstTraverser<String> for PathConvertor {
 
         **name = ObjectName(get_qualified_values_table_identifiers(&db_reference));
 
-        self.visitor.post_visit_create_table(create_table)?;
-
-        Ok(())
+        self.visitor.post_visit_create_table(create_table)
     }
 
     fn traverse_create_index(
@@ -911,9 +1008,7 @@ impl SqlAstTraverser<String> for PathConvertor {
         ]));
         **table_name = ObjectName(vec![Ident::new(VALUES_TABLE_NAME)]);
 
-        self.visitor.post_visit_create_index(create_index)?;
-
-        Ok(())
+        self.visitor.post_visit_create_index(create_index)
     }
 
     fn traverse_insert(&mut self, insert: &mut InsertStatementViewMutable) -> TraversalResult {
@@ -964,9 +1059,7 @@ impl SqlAstTraverser<String> for PathConvertor {
 
         **table_name = ObjectName(get_qualified_values_table_identifiers(&translated_db_name));
 
-        self.visitor.post_visit_insert(insert)?;
-
-        Ok(())
+        self.visitor.post_visit_insert(insert)
     }
 
     fn traverse_on_insert(&mut self, on_insert: &mut Option<OnInsert>) -> TraversalResult {
@@ -1062,9 +1155,7 @@ impl SqlAstTraverser<String> for PathConvertor {
 
         self.scopes.pop();
 
-        self.visitor.post_visit_ast_query(query)?;
-
-        Ok(())
+        self.visitor.post_visit_ast_query(query)
     }
 
     fn traverse_offset(&mut self, offset: &mut Offset) -> TraversalResult {
@@ -1126,26 +1217,19 @@ impl SqlAstTraverser<String> for PathConvertor {
         &mut self,
         set_operation: &mut SetOperationViewMutable,
     ) -> TraversalResult {
-        self.visitor.pre_visit_set_operation(set_operation)?;
-
-        let SetOperationViewMutable {
-            left,
-            op: _,
-            right,
-            set_quantifier: _,
-        } = set_operation;
+        self.visitor.pre_visit_set_operation_left(set_operation)?;
 
         self.scopes.push(Scope::new());
-        self.traverse_set_expr(left)?;
+        self.traverse_set_expr(set_operation.left)?;
         self.scopes.pop();
+
+        self.visitor.pre_visit_set_operation_right(set_operation)?;
 
         self.scopes.push(Scope::new());
-        self.traverse_set_expr(right)?;
+        self.traverse_set_expr(set_operation.right)?;
         self.scopes.pop();
 
-        self.visitor.post_visit_set_operation(set_operation)?;
-
-        Ok(())
+        self.visitor.post_visit_set_operation(set_operation)
     }
 
     fn traverse_table_with_joins(
@@ -1163,9 +1247,7 @@ impl SqlAstTraverser<String> for PathConvertor {
             .map(|join| self.traverse_join(join))
             .collect::<Result<Vec<_>, _>>()?;
 
-        self.visitor.post_visit_table_with_joins(table_with_joins)?;
-
-        Ok(())
+        self.visitor.post_visit_table_with_joins(table_with_joins)
     }
 
     fn traverse_join(&mut self, join: &mut Join) -> TraversalResult {
@@ -1318,9 +1400,7 @@ impl SqlAstTraverser<String> for PathConvertor {
         )?;
 
         self.visitor
-            .post_visit_table_factor_derived(derived_table_factor_view)?;
-
-        Ok(())
+            .post_visit_table_factor_derived(derived_table_factor_view)
     }
 
     fn traverse_select_tables(&mut self, tables: &mut Vec<TableWithJoins>) -> TraversalResult {
@@ -1331,9 +1411,7 @@ impl SqlAstTraverser<String> for PathConvertor {
             .map(|t| self.traverse_table_with_joins(t))
             .collect::<Result<Vec<_>, String>>()?;
 
-        self.visitor.post_visit_select_tables(tables)?;
-
-        Ok(())
+        self.visitor.post_visit_select_tables(tables)
     }
 
     fn traverse_select(&mut self, select: &mut Box<Select>) -> TraversalResult {
@@ -1419,9 +1497,7 @@ impl SqlAstTraverser<String> for PathConvertor {
             GroupByExpr::All => return Err("not implemented: GroupByExpr::All".to_string()),
         };
 
-        self.visitor.post_visit_select(select)?;
-
-        Ok(())
+        self.visitor.post_visit_select(select)
     }
 
     fn traverse_select_item(&mut self, select_item: &mut SelectItem) -> TraversalResult {
@@ -1473,9 +1549,7 @@ impl SqlAstTraverser<String> for PathConvertor {
         }
 
         self.visitor
-            .post_visit_wildcard_additional_options(wildcard_additional_options)?;
-
-        Ok(())
+            .post_visit_wildcard_additional_options(wildcard_additional_options)
     }
 
     fn traverse_expr(&mut self, expr: &mut Expr) -> TraversalResult {
@@ -1594,9 +1668,7 @@ impl SqlAstTraverser<String> for PathConvertor {
 
         self.traverse_ast_query(subquery)?;
 
-        self.visitor.post_visit_in_subquery(in_subquery)?;
-
-        Ok(())
+        self.visitor.post_visit_in_subquery(in_subquery)
     }
 
     fn traverse_function(&mut self, func: &mut Function) -> TraversalResult {
@@ -1640,9 +1712,7 @@ impl SqlAstTraverser<String> for PathConvertor {
             .map(|arg| self.traverse_function_arg(arg))
             .collect::<Result<Vec<_>, _>>()?;
 
-        self.visitor.post_visit_function(func)?;
-
-        Ok(())
+        self.visitor.post_visit_function(func)
     }
 
     fn traverse_function_arg(&mut self, function_arg: &mut FunctionArg) -> TraversalResult {
