@@ -541,6 +541,24 @@ impl VisitorMut for MyFirstVisitor {
 
         Ok(())
     }
+
+    fn post_visit_compound_identifier(&mut self, _identifiers: &mut Vec<Ident>) -> VisitResult {
+        // let (table_reference, column_name) = extract_binary_identifiers(identifiers, "expression")?;
+
+        // let table_replacement_identifiers =
+        //     get_replacement_identifiers_for_table(&self.scopes, &table_reference)?;
+
+        // let mut new_identifiers = table_replacement_identifiers.clone();
+        // new_identifiers.push(Ident::new(&column_name));
+
+        // *identifiers = new_identifiers;
+
+        Ok(())
+    }
+
+    fn pre_visit_function(&mut self, func: &mut Function) -> VisitResult {
+        validate_function_name(&func.name)
+    }
 }
 
 #[derive(Debug)]
