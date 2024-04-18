@@ -1,9 +1,9 @@
 mod ast_views;
 
 use self::ast_views::{
-    CreateIndexStatementViewMutable, CreateTableStatementViewMutable,
-    DerivedTableFactorViewMutable, DropStatementViewMutable, InSubqueryExprViewMutable,
-    InsertStatementViewMutable, SetOperationViewMutable, UpdateStatementViewMutable,
+    CreateIndexStatementViewMutable, CreateTableStatementViewMutable, DropStatementViewMutable,
+    InSubqueryExprViewMutable, InsertStatementViewMutable, SetOperationViewMutable,
+    TableFactorDerivedViewMut, TableFactorTableViewMut, UpdateStatementViewMutable,
 };
 use super::{VALUES_TABLE_INDEX_PREFIX, VALUES_TABLE_NAME};
 use sqlparser::ast::{
@@ -205,14 +205,14 @@ pub trait VisitorMut {
 
     fn pre_visit_table_factor_derived(
         &mut self,
-        _relation: &mut DerivedTableFactorViewMutable,
+        _relation: &mut TableFactorDerivedViewMut,
     ) -> VisitResult {
         Ok(())
     }
 
     fn post_visit_table_factor_derived(
         &mut self,
-        _relation: &mut DerivedTableFactorViewMutable,
+        _relation: &mut TableFactorDerivedViewMut,
     ) -> VisitResult {
         Ok(())
     }
@@ -513,7 +513,11 @@ pub trait SqlAstTraverser<Error> {
     fn traverse_table_factor(&mut self, relation: &mut TableFactor) -> TraversalResult;
     fn traverse_table_factor_derived(
         &mut self,
-        relation: &mut DerivedTableFactorViewMutable,
+        relation: &mut TableFactorDerivedViewMut,
+    ) -> TraversalResult;
+    fn traverse_table_factor_table(
+        &mut self,
+        relation: &mut TableFactorTableViewMut,
     ) -> TraversalResult;
     fn traverse_select_tables(&mut self, tables: &mut Vec<TableWithJoins>) -> TraversalResult;
     fn traverse_select(&mut self, select: &mut Box<Select>) -> TraversalResult;
@@ -1306,47 +1310,8 @@ impl SqlAstTraverser<String> for PathConvertor {
         self.visitor.pre_visit_table_factor(relation)?;
 
         match relation {
-            TableFactor::Table {
-                alias,
-                args,
-                name: table_name,
-                partitions,
-                version,
-                with_hints,
-            } => {
-                if args.is_some() {
-                    return Err("not implemented: TableFactor::Table::args".to_string());
-                }
-
-                if !partitions.is_empty() {
-                    return Err("not implemented: TableFactor::Table::partitions".to_string());
-                }
-
-                if version.is_some() {
-                    return Err("not implemented: TableFactor::Table::version".to_string());
-                }
-
-                if !with_hints.is_empty() {
-                    return Err("not implemented: TableFactor::Table::with_hints".to_string());
-                }
-
-                let db_reference = convert_path_to_database(table_name, &mut self.database_names)?;
-
-                let scope = self
-                    .scopes
-                    .last_mut()
-                    .ok_or("Expected scope to exist in traverse_table_factor")?;
-
-                add_to_referencable_tables(
-                    &Some(&table_name),
-                    alias,
-                    &mut self.database_names,
-                    &mut scope.referencable_tables,
-                )?;
-
-                *table_name = ObjectName(get_qualified_values_table_identifiers(&db_reference));
-
-                Ok(())
+            TableFactor::Table { .. } => {
+                self.traverse_table_factor_table(&mut relation.try_into().unwrap())
             }
             TableFactor::Derived { .. } => {
                 self.traverse_table_factor_derived(&mut relation.try_into().unwrap())
@@ -1372,14 +1337,59 @@ impl SqlAstTraverser<String> for PathConvertor {
         self.visitor.post_visit_table_factor(relation)
     }
 
+    fn traverse_table_factor_table(
+        &mut self,
+        relation: &mut TableFactorTableViewMut,
+    ) -> TraversalResult {
+        let TableFactorTableViewMut {
+            alias,
+            args,
+            name: table_name,
+            partitions,
+            version,
+            with_hints,
+        } = relation;
+
+        if args.is_some() {
+            return Err("not implemented: TableFactor::Table::args".to_string());
+        }
+        if !partitions.is_empty() {
+            return Err("not implemented: TableFactor::Table::partitions".to_string());
+        }
+        if version.is_some() {
+            return Err("not implemented: TableFactor::Table::version".to_string());
+        }
+        if !with_hints.is_empty() {
+            return Err("not implemented: TableFactor::Table::with_hints".to_string());
+        }
+
+        let db_reference = convert_path_to_database(table_name, &mut self.database_names)?;
+
+        let scope = self
+            .scopes
+            .last_mut()
+            .ok_or("Expected scope to exist in traverse_table_factor")?;
+
+        add_to_referencable_tables(
+            &Some(&table_name),
+            alias,
+            &mut self.database_names,
+            &mut scope.referencable_tables,
+        )?;
+
+        **table_name = ObjectName(get_qualified_values_table_identifiers(&db_reference));
+
+        Ok(())
+    }
+
     fn traverse_table_factor_derived(
         &mut self,
-        derived_table_factor_view: &mut DerivedTableFactorViewMutable,
+        derived_table_factor_view: &mut TableFactorDerivedViewMut,
     ) -> TraversalResult {
         self.visitor
             .pre_visit_table_factor_derived(derived_table_factor_view)?;
 
-        let DerivedTableFactorViewMutable {
+        let TableFactorDerivedViewMut {
             lateral: _,
             subquery,
             alias,

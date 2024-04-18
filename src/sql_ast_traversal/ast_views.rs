@@ -1,8 +1,8 @@
 use sqlparser::ast::{
-    Assignment, ColumnDef, Expr, FileFormat, HiveDistributionStyle, HiveFormat, Ident,
+    Assignment, ColumnDef, Expr, FileFormat, FunctionArg, HiveDistributionStyle, HiveFormat, Ident,
     MysqlInsertPriority, ObjectName, ObjectType, OnCommit, OnInsert, OrderByExpr, Query,
     SelectItem, SetExpr, SetOperator, SetQuantifier, SqlOption, SqliteOnConflict, Statement,
-    TableAlias, TableConstraint, TableFactor, TableWithJoins,
+    TableAlias, TableConstraint, TableFactor, TableVersion, TableWithJoins,
 };
 
 #[derive(Debug)]
@@ -350,13 +350,13 @@ impl<'a> TryFrom<&'a mut Expr> for InSubqueryExprViewMutable<'a> {
 }
 
 #[derive(Debug)]
-pub struct DerivedTableFactorViewMutable<'a> {
+pub struct TableFactorDerivedViewMut<'a> {
     pub alias: &'a mut Option<TableAlias>,
     pub lateral: &'a mut bool,
     pub subquery: &'a mut Box<Query>,
 }
 
-impl<'a> TryFrom<&'a mut TableFactor> for DerivedTableFactorViewMutable<'a> {
+impl<'a> TryFrom<&'a mut TableFactor> for TableFactorDerivedViewMut<'a> {
     type Error = String;
 
     fn try_from(table_factor: &'a mut TableFactor) -> Result<Self, Self::Error> {
@@ -365,12 +365,47 @@ impl<'a> TryFrom<&'a mut TableFactor> for DerivedTableFactorViewMutable<'a> {
                 alias,
                 lateral,
                 subquery,
-            } => Ok(DerivedTableFactorViewMutable {
+            } => Ok(TableFactorDerivedViewMut {
                 alias,
                 lateral,
                 subquery,
             }),
             _ => Err("Expected a DerivedTableFactor".to_string()),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct TableFactorTableViewMut<'a> {
+    pub alias: &'a mut Option<TableAlias>,
+    pub args: &'a mut Option<Vec<FunctionArg>>,
+    pub name: &'a mut ObjectName,
+    pub partitions: &'a mut Vec<Ident>,
+    pub version: &'a mut Option<TableVersion>,
+    pub with_hints: &'a mut Vec<Expr>,
+}
+
+impl<'a> TryFrom<&'a mut TableFactor> for TableFactorTableViewMut<'a> {
+    type Error = String;
+
+    fn try_from(table_factor: &'a mut TableFactor) -> Result<Self, Self::Error> {
+        match table_factor {
+            TableFactor::Table {
+                alias,
+                args,
+                name,
+                partitions,
+                version,
+                with_hints,
+            } => Ok(TableFactorTableViewMut {
+                alias,
+                args,
+                name,
+                partitions,
+                version,
+                with_hints,
+            }),
+            _ => Err("Expected a TableFactor".to_string()),
         }
     }
 }
