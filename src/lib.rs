@@ -26,7 +26,7 @@ fn translate_sql(query: &str) -> Result<TranslatedQuery<Vec<String>>, String> {
 
     // println!("AST: {:#?}", ast);
 
-    let mut path_convertor = PathConvertor::new();
+    let mut path_convertor = PathConvertor::new(Box::new(MyFirstVisitor::new()));
 
     path_convertor.traverse(&mut ast)?;
 
