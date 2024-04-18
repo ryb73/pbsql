@@ -337,11 +337,7 @@ pub trait VisitorMut {
         Ok(())
     }
 
-    fn pre_visit_value_placeholder(&mut self, _value: &mut String) -> VisitResult {
-        Ok(())
-    }
-
-    fn post_visit_value_placeholder(&mut self, _value: &mut String) -> VisitResult {
+    fn visit_value_placeholder(&mut self, _value: &mut String) -> VisitResult {
         Ok(())
     }
 }
@@ -566,6 +562,14 @@ impl VisitorMut for MyFirstVisitor {
 
     fn pre_visit_function(&mut self, func: &mut Function) -> VisitResult {
         validate_function_name(&func.name)
+    }
+
+    fn visit_value_placeholder(&mut self, value: &mut String) -> VisitResult {
+        if value == "?" {
+            Ok(())
+        } else {
+            Err(format!("Unhandled value: Value::Placeholder({})", value))
+        }
     }
 }
 
@@ -1918,15 +1922,7 @@ impl SqlAstTraverser<String> for PathConvertor {
     }
 
     fn traverse_value_placeholder(&mut self, value: &mut String) -> TraversalResult {
-        self.visitor.pre_visit_value_placeholder(value)?;
-
-        if value == "?" {
-            Ok(())
-        } else {
-            Err(format!("Unhandled value: Value::Placeholder({})", value))
-        }?;
-
-        self.visitor.post_visit_value_placeholder(value)
+        self.visitor.visit_value_placeholder(value)
     }
 }
 
