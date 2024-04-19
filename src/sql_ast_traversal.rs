@@ -1106,7 +1106,6 @@ impl SqlAstTraverser for PathConvertor {
             return Err("not implemented: Insert::returning".to_string());
         }
 
-        // TODO: I don't know if this case is covered by tests?
         source
             .as_mut()
             .map(|s| self.traverse_ast_query(s))

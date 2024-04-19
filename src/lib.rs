@@ -24,11 +24,13 @@ fn translate_sql(query: &str) -> Result<TranslatedQuery<Vec<String>>, String> {
 
     let mut ast = Parser::parse_sql(&dialect, query).map_err(|e| e.to_string())?;
 
-    // println!("AST: {:#?}", ast);
+    // println!("Input AST: {:#?}", ast);
 
     let mut path_convertor = PathConvertor::new();
 
     path_convertor.traverse(&mut ast)?;
+
+    // println!("Output AST: {:#?}", ast);
 
     Ok(TranslatedQuery {
         databases: path_convertor.database_names,
@@ -61,10 +63,9 @@ pub fn translate_sql_wasm(query: &str) -> Result<JsTranslatedQueryResult, JsValu
 #[cfg(test)]
 mod tests {
     use sqlparser::ast::{
-        self, CharacterLength, ColumnDef, ColumnOption, ColumnOptionDef, ConstraintCharacteristics,
-        DataType, Expr, GroupByExpr, HiveDistributionStyle, Ident, ObjectName, Query,
-        ReferentialAction, Select, SelectItem, SetExpr, Statement::CreateTable, Value,
-        WildcardAdditionalOptions,
+        Expr, GroupByExpr, Ident, ObjectName, Query, Select, SelectItem, SetExpr,
+        Statement::{self},
+        Value, WildcardAdditionalOptions,
     };
     use std::collections::HashMap;
 
@@ -72,76 +73,15 @@ mod tests {
 
     #[test]
     fn build_sql_test() {
-        let blah = CreateTable {
-            auto_increment_offset: Some(8),
-            clone: None,
-            cluster_by: None,
-            collation: Some("utf8mb4_general_ci".to_string()),
-            columns: vec![
-                ColumnDef {
-                    data_type: DataType::Varchar(Some(CharacterLength::IntegerLength {
-                        length: 255,
-                        unit: None,
-                    })),
-                    name: Ident::new("id"),
-                    collation: None,
-                    options: vec![ColumnOptionDef {
-                        name: Some(Ident::new("primary".to_string())),
-                        option: ColumnOption::ForeignKey {
-                            foreign_table: ObjectName(vec![Ident::new("dwaynee")]),
-                            referred_columns: vec![Ident::new("id")],
-                            on_delete: Some(ReferentialAction::Cascade),
-                            on_update: Some(ReferentialAction::Cascade),
-                            characteristics: Some(ConstraintCharacteristics {
-                                deferrable: Some(true),
-                                initially: None,
-                                enforced: None,
-                            }),
-                        },
-                    }],
-                },
-                ColumnDef {
-                    data_type: DataType::Varchar(Some(CharacterLength::IntegerLength {
-                        length: 255,
-                        unit: None,
-                    })),
-                    name: Ident::new("name"),
-                    collation: None,
-                    options: vec![ColumnOptionDef {
-                        name: Some(Ident::new("primary".to_string())),
-                        option: ColumnOption::Null,
-                    }],
-                },
-            ],
-            comment: Some("This is not a table".to_string()),
-            constraints: vec![/* TableConstraint::Unique {
-                name: Some(Ident::new("unique".to_string())),
-                columns: vec![Ident::new("id")],
-                is_primary: false,
-                characteristics: Some(ConstraintCharacteristics {
-                    deferrable: Some(true),
-                    initially: None,
-                    enforced: None,
-                }),
-            } */],
-            default_charset: Some("utf8mb4".to_string()),
-            engine: None,
-            external: true,
-            file_format: Some(ast::FileFormat::AVRO),
-            global: Some(true),
-            hive_distribution: HiveDistributionStyle::NONE,
-            hive_formats: None,
-            if_not_exists: false,
-            like: None,
-            location: Some("s3://bucket/prefix".to_string()),
-            name: ObjectName(vec![Ident::new("dwayne")]),
-            on_cluster: None,
-            on_commit: Some(ast::OnCommit::Drop),
-            options: None,
-            or_replace: false,
-            order_by: None,
-            partition_by: None,
-            query: Some(Box::new(Query {
+        let blah = Statement::Insert {
+            or: None,
+            ignore: false,
+            into: true,
+            table_name: ObjectName(vec![Ident::new("table")]),
+            table_alias: Some(Ident::new("t")),
+            columns: vec![Ident::new("a")],
+            overwrite: false,
+            source: Some(Box::new(Query {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     distinct: None,
                     top: None,
@@ -172,12 +112,13 @@ mod tests {
                 locks: vec![],
                 for_clause: None,
             })),
-            strict: true,
-            table_properties: vec![],
-            temporary: false,
-            transient: false,
-            with_options: vec![],
-            without_rowid: true,
+            partitioned: None,
+            after_columns: vec![],
+            table: false,
+            on: None,
+            returning: None,
+            replace_into: false,
+            priority: None,
         };
 
         let compiled = blah.to_string();
@@ -607,8 +548,37 @@ mod tests {
                 query,
                 vec![
                     [
-                        r#"INSERT INTO main.table_contents ("id", "loserId", "winnerId", "matchDate") VALUES "#,
-                        r#"(?, ?, DATETIME('now'), CURRENT_TIMESTAMP)"#
+                        r#"INSERT INTO main.table_contents ("id", "loserId", "winnerId", "matchDate") "#,
+                        r#"VALUES (?, ?, DATETIME('now'), CURRENT_TIMESTAMP)"#
+                    ].join(""),
+                ]
+            );
+        } else {
+            panic!("Unexpected result: {:?}", translate_result);
+        }
+    }
+
+    #[test]
+    fn insert_from_select() {
+        let sql = r#"
+            INSERT INTO "~/books/matches" ("id", "loserId", "winnerId", "matchDate")
+            SELECT "~/books/matches"."id" || '2', "loserId", "~/books/matches"."winnerId", "matchDate" FROM "~/books/matches"
+        "#;
+
+        let translate_result = translate_sql(sql);
+
+        if let Ok(TranslatedQuery { databases, query }) = translate_result {
+            assert_eq!(
+                databases,
+                HashMap::from([("~/books/matches".to_string(), "main".to_string()),]),
+            );
+
+            assert_eq!(
+                query,
+                vec![
+                    [
+                        r#"INSERT INTO main.table_contents ("id", "loserId", "winnerId", "matchDate") "#,
+                        r#"SELECT main.table_contents.id || '2', "loserId", main.table_contents.winnerId, "matchDate" FROM main.table_contents"#
                     ].join(""),
                 ]
             );
