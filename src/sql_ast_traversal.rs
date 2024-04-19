@@ -220,6 +220,42 @@ impl SqlAstTraverser for PathConvertor {
         Ok(())
     }
 
+    fn pre_visit_create_index(
+        &mut self,
+        create_index: &mut CreateIndexStatementViewMutable,
+    ) -> VisitResult {
+        let CreateIndexStatementViewMutable {
+            columns: _,
+            name,
+            table_name: _,
+            unique: _,
+            if_not_exists: _,
+            nulls_distinct: _,
+            concurrently,
+            include,
+            predicate: _,
+            using,
+        } = create_index;
+
+        if name.is_none() {
+            return Err("Index name is required".to_string());
+        }
+
+        if **concurrently {
+            return Err("not implemented: CreateIndex::concurrently".to_string());
+        }
+
+        if !include.is_empty() {
+            return Err("not implemented: CreateIndex::include".to_string());
+        }
+
+        if using.is_some() {
+            return Err("not implemented: CreateIndex::using".to_string());
+        }
+
+        Ok(())
+    }
+
     fn post_visit_create_index(
         &mut self,
         create_index: &mut CreateIndexStatementViewMutable,
@@ -426,35 +462,19 @@ impl SqlAstTraverser for PathConvertor {
 
         let CreateIndexStatementViewMutable {
             columns,
-            name,
+            name: _,
             table_name: _,
             unique: _,
             if_not_exists: _,
             nulls_distinct: _,
-            concurrently,
-            include,
+            concurrently: _,
+            include: _,
             predicate,
-            using,
+            using: _,
         } = create_index;
-
-        if name.is_none() {
-            return Err("Index name is required".to_string());
-        }
-
-        if **concurrently {
-            return Err("not implemented: CreateIndex::concurrently".to_string());
-        }
-
-        if !include.is_empty() {
-            return Err("not implemented: CreateIndex::include".to_string());
-        }
 
         if predicate.is_some() {
             return Err("not implemented: CreateIndex::predicate".to_string());
-        }
-
-        if using.is_some() {
-            return Err("not implemented: CreateIndex::using".to_string());
         }
 
         columns
