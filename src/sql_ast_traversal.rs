@@ -276,6 +276,36 @@ impl SqlAstTraverser for PathConvertor {
         Ok(())
     }
 
+    fn pre_visit_insert(&mut self, insert: &mut InsertStatementViewMutable) -> VisitResult {
+        let InsertStatementViewMutable {
+            columns: _,
+            table_name: _,
+            table_alias: _,
+            ignore: _,
+            into: _,
+            or: _,
+            overwrite: _,
+            replace_into: _,
+            table: _,
+            source: _,
+            after_columns,
+            on: _,
+            partitioned: _,
+            priority,
+            returning: _,
+        } = insert;
+
+        if !after_columns.is_empty() {
+            return Err("not implemented: Insert::after_columns".to_string());
+        }
+
+        if priority.is_some() {
+            return Err("not implemented: Insert::priority".to_string());
+        }
+
+        Ok(())
+    }
+
     fn post_visit_insert(&mut self, insert: &mut InsertStatementViewMutable) -> VisitResult {
         let InsertStatementViewMutable {
             after_columns: _,
@@ -468,23 +498,15 @@ impl SqlAstTraverser for PathConvertor {
             replace_into: _,
             table: _,
             source,
-            after_columns,
+            after_columns: _,
             on,
             partitioned,
-            priority,
+            priority: _,
             returning,
         } = insert;
 
-        if !after_columns.is_empty() {
-            return Err("not implemented: Insert::after_columns".to_string());
-        }
-
         if partitioned.is_some() {
             return Err("not implemented: Insert::partitioned".to_string());
-        }
-
-        if priority.is_some() {
-            return Err("not implemented: Insert::priority".to_string());
         }
 
         if returning.is_some() {
