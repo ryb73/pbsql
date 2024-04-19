@@ -357,28 +357,28 @@ impl MyFirstVisitor {
 }
 
 impl VisitorMut for MyFirstVisitor {
-    fn post_visit_drop(&mut self, _drop: &mut DropStatementViewMutable) -> VisitResult {
-        // let DropStatementViewMutable {
-        //     cascade: _,
-        //     if_exists: _,
-        //     names,
-        //     object_type: _,
-        //     purge: _,
-        //     restrict: _,
-        //     temporary: _,
-        // } = drop;
+    fn post_visit_drop(&mut self, drop: &mut DropStatementViewMutable) -> VisitResult {
+        let DropStatementViewMutable {
+            cascade: _,
+            if_exists: _,
+            names,
+            object_type: _,
+            purge: _,
+            restrict: _,
+            temporary: _,
+        } = drop;
 
-        // let new_names = names
-        //     .iter()
-        //     .map(|name| {
-        //         let db_reference = convert_path_to_database(name, &mut self.database_names)?;
-        //         Ok(ObjectName(get_qualified_values_table_identifiers(
-        //             &db_reference,
-        //         )))
-        //     })
-        //     .collect::<Result<Vec<_>, String>>()?;
+        let new_names = names
+            .iter()
+            .map(|name| {
+                let db_reference = convert_path_to_database(name, &mut self.database_names)?;
+                Ok(ObjectName(get_qualified_values_table_identifiers(
+                    &db_reference,
+                )))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
 
-        // **names = new_names;
+        **names = new_names;
 
         Ok(())
     }
@@ -401,61 +401,57 @@ impl VisitorMut for MyFirstVisitor {
 
     fn post_visit_create_table(
         &mut self,
-        _create_table: &mut CreateTableStatementViewMutable,
+        create_table: &mut CreateTableStatementViewMutable,
     ) -> VisitResult {
-        // let db_reference = convert_path_to_database(create_table.name, &mut self.database_names)?;
+        let db_reference = convert_path_to_database(create_table.name, &mut self.database_names)?;
 
-        // *create_table.name = ObjectName(get_qualified_values_table_identifiers(&db_reference));
+        *create_table.name = ObjectName(get_qualified_values_table_identifiers(&db_reference));
 
         Ok(())
     }
 
     fn post_visit_create_index(
         &mut self,
-        _create_index: &mut CreateIndexStatementViewMutable,
+        create_index: &mut CreateIndexStatementViewMutable,
     ) -> VisitResult {
-        // let ObjectName(name_identifiers) = create_index.name.as_ref().unwrap();
+        let ObjectName(name_identifiers) = create_index.name.as_ref().unwrap();
 
-        // let index_name = extract_unary_identifier(name_identifiers, "index")?;
+        let index_name = extract_unary_identifier(name_identifiers, "index")?;
 
-        // let translated_db_name =
-        //     convert_path_to_database(&create_index.table_name, &mut self.database_names)?;
+        let translated_db_name =
+            convert_path_to_database(&create_index.table_name, &mut self.database_names)?;
 
-        // -- iteration happens here --
-
-        // *create_index.name = Some(ObjectName(vec![
-        //     Ident::new(translated_db_name),
-        //     Ident::new(format!("{}{}", VALUES_TABLE_INDEX_PREFIX, index_name)),
-        // ]));
-        // *create_index.table_name = ObjectName(vec![Ident::new(VALUES_TABLE_NAME)]);
+        *create_index.name = Some(ObjectName(vec![
+            Ident::new(translated_db_name),
+            Ident::new(format!("{}{}", VALUES_TABLE_INDEX_PREFIX, index_name)),
+        ]));
+        *create_index.table_name = ObjectName(vec![Ident::new(VALUES_TABLE_NAME)]);
 
         Ok(())
     }
 
-    fn post_visit_insert(&mut self, _insert: &mut InsertStatementViewMutable) -> VisitResult {
-        // let InsertStatementViewMutable {
-        //     after_columns: _,
-        //     columns: _,
-        //     ignore: _,
-        //     into: _,
-        //     on: _,
-        //     or: _,
-        //     overwrite: _,
-        //     partitioned: _,
-        //     priority: _,
-        //     replace_into: _,
-        //     returning: _,
-        //     source: _,
-        //     table_alias: _,
-        //     table_name,
-        //     table: _,
-        // } = insert;
+    fn post_visit_insert(&mut self, insert: &mut InsertStatementViewMutable) -> VisitResult {
+        let InsertStatementViewMutable {
+            after_columns: _,
+            columns: _,
+            ignore: _,
+            into: _,
+            on: _,
+            or: _,
+            overwrite: _,
+            partitioned: _,
+            priority: _,
+            replace_into: _,
+            returning: _,
+            source: _,
+            table_alias: _,
+            table_name,
+            table: _,
+        } = insert;
 
-        // let translated_db_name = convert_path_to_database(table_name, &mut self.database_names)?;
+        let translated_db_name = convert_path_to_database(table_name, &mut self.database_names)?;
 
-        // -- iteration happens here --
-
-        // **table_name = ObjectName(get_qualified_values_table_identifiers(&translated_db_name));
+        **table_name = ObjectName(get_qualified_values_table_identifiers(&translated_db_name));
 
         Ok(())
     }
@@ -491,32 +487,32 @@ impl VisitorMut for MyFirstVisitor {
 
     fn post_visit_table_factor_table(
         &mut self,
-        _relation: &mut TableFactorTableViewMut,
+        relation: &mut TableFactorTableViewMut,
     ) -> VisitResult {
-        // let TableFactorTableViewMut {
-        //     alias,
-        //     args: _,
-        //     name: table_name,
-        //     partitions: _,
-        //     version: _,
-        //     with_hints: _,
-        // } = relation;
+        let TableFactorTableViewMut {
+            alias,
+            args: _,
+            name: table_name,
+            partitions: _,
+            version: _,
+            with_hints: _,
+        } = relation;
 
-        // let db_reference = convert_path_to_database(table_name, &mut self.database_names)?;
+        let db_reference = convert_path_to_database(table_name, &mut self.database_names)?;
 
-        // let scope = self
-        //     .scopes
-        //     .last_mut()
-        //     .ok_or("Expected scope to exist in traverse_table_factor")?;
+        let scope = self
+            .scopes
+            .last_mut()
+            .ok_or("Expected scope to exist in traverse_table_factor")?;
 
-        // add_to_referencable_tables(
-        //     &Some(&table_name),
-        //     alias,
-        //     &mut self.database_names,
-        //     &mut scope.referencable_tables,
-        // )?;
+        add_to_referencable_tables(
+            &Some(&table_name),
+            alias,
+            &mut self.database_names,
+            &mut scope.referencable_tables,
+        )?;
 
-        // **table_name = ObjectName(get_qualified_values_table_identifiers(&db_reference));
+        **table_name = ObjectName(get_qualified_values_table_identifiers(&db_reference));
 
         Ok(())
     }
@@ -546,16 +542,16 @@ impl VisitorMut for MyFirstVisitor {
         Ok(())
     }
 
-    fn post_visit_compound_identifier(&mut self, _identifiers: &mut Vec<Ident>) -> VisitResult {
-        // let (table_reference, column_name) = extract_binary_identifiers(identifiers, "expression")?;
+    fn post_visit_compound_identifier(&mut self, identifiers: &mut Vec<Ident>) -> VisitResult {
+        let (table_reference, column_name) = extract_binary_identifiers(identifiers, "expression")?;
 
-        // let table_replacement_identifiers =
-        //     get_replacement_identifiers_for_table(&self.scopes, &table_reference)?;
+        let table_replacement_identifiers =
+            get_replacement_identifiers_for_table(&self.scopes, &table_reference)?;
 
-        // let mut new_identifiers = table_replacement_identifiers.clone();
-        // new_identifiers.push(Ident::new(&column_name));
+        let mut new_identifiers = table_replacement_identifiers.clone();
+        new_identifiers.push(Ident::new(&column_name));
 
-        // *identifiers = new_identifiers;
+        *identifiers = new_identifiers;
 
         Ok(())
     }
@@ -588,9 +584,9 @@ impl Scope {
 
 type TraversalResult = Result<(), String>;
 
-pub trait SqlAstTraverser<Error> {
+pub trait SqlAstTraverser<'a, Error> {
     fn get_visitor(&mut self) -> &mut dyn VisitorMut;
-    fn new(visitor: Box<dyn VisitorMut>) -> Self;
+    fn new(visitor: &'a mut dyn VisitorMut) -> Self;
     fn traverse(&mut self, ast: &mut Vec<Statement>) -> TraversalResult;
     fn traverse_statement(&mut self, statement: &mut Statement) -> TraversalResult;
     fn traverse_drop(&mut self, drop: &mut DropStatementViewMutable) -> TraversalResult;
@@ -651,19 +647,13 @@ pub trait SqlAstTraverser<Error> {
     fn traverse_value_placeholder(&mut self, value: &mut String) -> TraversalResult;
 }
 
-pub struct PathConvertor {
-    pub database_names: DatabaseNamesByPath,
-    scopes: Vec<Scope>,
-    visitor: Box<dyn VisitorMut>,
+pub struct PathConvertor<'a> {
+    visitor: &'a mut dyn VisitorMut,
 }
 
-impl SqlAstTraverser<String> for PathConvertor {
-    fn new(visitor: Box<dyn VisitorMut>) -> Self {
-        PathConvertor {
-            database_names: HashMap::new(),
-            scopes: vec![],
-            visitor,
-        }
+impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
+    fn new(visitor: &'a mut dyn VisitorMut) -> Self {
+        PathConvertor { visitor }
     }
 
     fn traverse_statement(&mut self, statement: &mut Statement) -> TraversalResult {
@@ -826,7 +816,7 @@ impl SqlAstTraverser<String> for PathConvertor {
         let DropStatementViewMutable {
             cascade,
             if_exists: _,
-            names,
+            names: _,
             object_type,
             purge,
             restrict,
@@ -859,18 +849,6 @@ impl SqlAstTraverser<String> for PathConvertor {
             Err("not implemented: Statement::Drop::temporary".to_string())?;
         };
 
-        let new_names = names
-            .iter()
-            .map(|name| {
-                let db_reference = convert_path_to_database(name, &mut self.database_names)?;
-                Ok(ObjectName(get_qualified_values_table_identifiers(
-                    &db_reference,
-                )))
-            })
-            .collect::<Result<Vec<_>, String>>()?;
-
-        **names = new_names;
-
         self.visitor.post_visit_drop(drop)
     }
 
@@ -889,8 +867,6 @@ impl SqlAstTraverser<String> for PathConvertor {
             return Err("not implemented: Statement::Update::returning".to_string());
         }
 
-        self.scopes.push(Scope::new());
-
         self.traverse_table_with_joins(table)?;
 
         from.as_mut()
@@ -906,8 +882,6 @@ impl SqlAstTraverser<String> for PathConvertor {
             .as_mut()
             .map(|s| self.traverse_expr(s))
             .transpose()?;
-
-        self.scopes.pop();
 
         self.visitor.post_visit_update(update)
     }
@@ -929,7 +903,7 @@ impl SqlAstTraverser<String> for PathConvertor {
 
         let CreateTableStatementViewMutable {
             if_not_exists: _,
-            name,
+            name: _,
             columns: _,
             auto_increment_offset: _,
             clone,
@@ -1060,10 +1034,6 @@ impl SqlAstTraverser<String> for PathConvertor {
             return Err("not implemented: CreateTable::without_rowid".to_string());
         }
 
-        let db_reference = convert_path_to_database(name, &mut self.database_names)?;
-
-        **name = ObjectName(get_qualified_values_table_identifiers(&db_reference));
-
         self.visitor.post_visit_create_table(create_table)
     }
 
@@ -1076,7 +1046,7 @@ impl SqlAstTraverser<String> for PathConvertor {
         let CreateIndexStatementViewMutable {
             columns,
             name,
-            table_name,
+            table_name: _,
             unique: _,
             if_not_exists: _,
             nulls_distinct: _,
@@ -1106,22 +1076,10 @@ impl SqlAstTraverser<String> for PathConvertor {
             return Err("not implemented: CreateIndex::using".to_string());
         }
 
-        let ObjectName(name_identifiers) = name.as_ref().unwrap();
-
-        let index_name = extract_unary_identifier(name_identifiers, "index")?;
-
-        let translated_db_name = convert_path_to_database(table_name, &mut self.database_names)?;
-
         columns
             .iter_mut()
             .map(|c| self.traverse_order_by_expr(c))
             .collect::<Result<Vec<_>, _>>()?;
-
-        **name = Some(ObjectName(vec![
-            Ident::new(translated_db_name),
-            Ident::new(format!("{}{}", VALUES_TABLE_INDEX_PREFIX, index_name)),
-        ]));
-        **table_name = ObjectName(vec![Ident::new(VALUES_TABLE_NAME)]);
 
         self.visitor.post_visit_create_index(create_index)
     }
@@ -1131,7 +1089,7 @@ impl SqlAstTraverser<String> for PathConvertor {
 
         let InsertStatementViewMutable {
             columns: _,
-            table_name,
+            table_name: _,
             table_alias: _,
             ignore: _,
             into: _,
@@ -1163,16 +1121,13 @@ impl SqlAstTraverser<String> for PathConvertor {
             return Err("not implemented: Insert::returning".to_string());
         }
 
-        let translated_db_name = convert_path_to_database(table_name, &mut self.database_names)?;
-
+        // TODO: I don't know if this case is covered by tests?
         source
             .as_mut()
             .map(|s| self.traverse_ast_query(s))
             .unwrap_or(Ok(()))?;
 
         self.traverse_on_insert(on)?;
-
-        **table_name = ObjectName(get_qualified_values_table_identifiers(&translated_db_name));
 
         self.visitor.post_visit_insert(insert)
     }
@@ -1252,8 +1207,6 @@ impl SqlAstTraverser<String> for PathConvertor {
             return Err("not implemented: ast::Query::with".to_string());
         }
 
-        self.scopes.push(Scope::new());
-
         self.traverse_set_expr(body)?;
 
         order_by
@@ -1267,8 +1220,6 @@ impl SqlAstTraverser<String> for PathConvertor {
             .transpose()?;
 
         limit.as_mut().map(|l| self.traverse_expr(l)).transpose()?;
-
-        self.scopes.pop();
 
         self.visitor.post_visit_ast_query(query)
     }
@@ -1334,15 +1285,11 @@ impl SqlAstTraverser<String> for PathConvertor {
     ) -> TraversalResult {
         self.visitor.pre_visit_set_operation_left(set_operation)?;
 
-        self.scopes.push(Scope::new());
         self.traverse_set_expr(set_operation.left)?;
-        self.scopes.pop();
 
         self.visitor.pre_visit_set_operation_right(set_operation)?;
 
-        self.scopes.push(Scope::new());
         self.traverse_set_expr(set_operation.right)?;
-        self.scopes.pop();
 
         self.visitor.post_visit_set_operation(set_operation)
     }
@@ -1455,9 +1402,9 @@ impl SqlAstTraverser<String> for PathConvertor {
         self.visitor.pre_visit_table_factor_table(relation)?;
 
         let TableFactorTableViewMut {
-            alias,
+            alias: _,
             args,
-            name: table_name,
+            name: _,
             partitions,
             version,
             with_hints,
@@ -1479,22 +1426,6 @@ impl SqlAstTraverser<String> for PathConvertor {
             return Err("not implemented: TableFactor::Table::with_hints".to_string());
         }
 
-        let db_reference = convert_path_to_database(table_name, &mut self.database_names)?;
-
-        let scope = self
-            .scopes
-            .last_mut()
-            .ok_or("Expected scope to exist in traverse_table_factor")?;
-
-        add_to_referencable_tables(
-            &Some(&table_name),
-            alias,
-            &mut self.database_names,
-            &mut scope.referencable_tables,
-        )?;
-
-        **table_name = ObjectName(get_qualified_values_table_identifiers(&db_reference));
-
         self.visitor.post_visit_table_factor_table(relation)
     }
 
@@ -1508,22 +1439,10 @@ impl SqlAstTraverser<String> for PathConvertor {
         let TableFactorDerivedViewMut {
             lateral: _,
             subquery,
-            alias,
+            alias: _,
         } = derived_table_factor_view;
 
         self.traverse_ast_query(subquery)?;
-
-        let scope = self
-            .scopes
-            .last_mut()
-            .ok_or("Expected scope to exist in traverse_table_factor_derived")?;
-
-        add_to_referencable_tables(
-            &None,
-            alias,
-            &mut self.database_names,
-            &mut scope.referencable_tables,
-        )?;
 
         self.visitor
             .post_visit_table_factor_derived(derived_table_factor_view)
@@ -1679,18 +1598,8 @@ impl SqlAstTraverser<String> for PathConvertor {
     }
 
     fn traverse_compound_identifier(&mut self, identifiers: &mut Vec<Ident>) -> TraversalResult {
+        // TODO: pre and post not necessary
         self.visitor.pre_visit_compound_identifier(identifiers)?;
-
-        let (table_reference, column_name) = extract_binary_identifiers(identifiers, "expression")?;
-
-        let table_replacement_identifiers =
-            get_replacement_identifiers_for_table(&self.scopes, &table_reference)?;
-
-        let mut new_identifiers = table_replacement_identifiers.clone();
-        new_identifiers.push(Ident::new(&column_name));
-
-        *identifiers = new_identifiers;
-
         self.visitor.post_visit_compound_identifier(identifiers)
     }
 
@@ -1918,7 +1827,7 @@ impl SqlAstTraverser<String> for PathConvertor {
     }
 
     fn get_visitor(&mut self) -> &mut dyn VisitorMut {
-        self.visitor.as_mut()
+        self.visitor
     }
 
     fn traverse_value_placeholder(&mut self, value: &mut String) -> TraversalResult {
