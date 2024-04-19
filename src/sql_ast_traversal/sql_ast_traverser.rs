@@ -484,9 +484,55 @@ pub trait SqlAstTraverser<Error = String> {
         self.post_visit_statement(statement)
     }
 
-    fn traverse_drop(&mut self, drop: &mut DropStatementViewMutable) -> TraversalResult;
-    fn traverse_update(&mut self, update: &mut UpdateStatementViewMutable) -> TraversalResult;
-    fn traverse_assignment(&mut self, assignment: &mut Assignment) -> TraversalResult;
+    fn traverse_drop(&mut self, drop: &mut DropStatementViewMutable) -> TraversalResult {
+        // TODO: pre and post not necessary
+        self.pre_visit_drop(drop)?;
+        self.post_visit_drop(drop)
+    }
+
+    fn traverse_update(&mut self, update: &mut UpdateStatementViewMutable) -> TraversalResult {
+        self.pre_visit_update(update)?;
+
+        let UpdateStatementViewMutable {
+            assignments,
+            from,
+            returning,
+            selection,
+            table,
+        } = update;
+
+        if returning.is_some() {
+            return Err("not implemented: Statement::Update::returning".to_string());
+        }
+
+        self.traverse_table_with_joins(table)?;
+
+        from.as_mut()
+            .map(|f| self.traverse_table_with_joins(f))
+            .transpose()?;
+
+        assignments
+            .iter_mut()
+            .map(|assignment| self.traverse_assignment(assignment))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        selection
+            .as_mut()
+            .map(|s| self.traverse_expr(s))
+            .transpose()?;
+
+        self.post_visit_update(update)
+    }
+
+    fn traverse_assignment(&mut self, assignment: &mut Assignment) -> TraversalResult {
+        self.pre_visit_assignment(assignment)?;
+
+        let Assignment { id: _, value } = assignment;
+        self.traverse_expr(value)?;
+
+        self.post_visit_assignment(assignment)
+    }
+
     fn traverse_create_table(
         &mut self,
         create_table: &mut CreateTableStatementViewMutable,
