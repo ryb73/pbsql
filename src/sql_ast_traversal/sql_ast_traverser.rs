@@ -607,7 +607,34 @@ pub trait SqlAstTraverser<Error = String> {
     fn traverse_create_index(
         &mut self,
         create_index: &mut CreateIndexStatementViewMutable,
-    ) -> TraversalResult;
+    ) -> TraversalResult {
+        self.pre_visit_create_index(create_index)?;
+
+        let CreateIndexStatementViewMutable {
+            columns,
+            name: _,
+            table_name: _,
+            unique: _,
+            if_not_exists: _,
+            nulls_distinct: _,
+            concurrently: _,
+            include: _,
+            predicate,
+            using: _,
+        } = create_index;
+
+        if predicate.is_some() {
+            return Err("not implemented: CreateIndex::predicate".to_string());
+        }
+
+        columns
+            .iter_mut()
+            .map(|c| self.traverse_order_by_expr(c))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        self.post_visit_create_index(create_index)
+    }
+
     fn traverse_insert(&mut self, insert: &mut InsertStatementViewMutable) -> TraversalResult;
     fn traverse_on_insert(&mut self, on_insert: &mut Option<OnInsert>) -> TraversalResult;
     fn traverse_on_conflict(&mut self, on_conflict: &mut OnConflict) -> TraversalResult;
