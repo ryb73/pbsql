@@ -484,62 +484,6 @@ impl SqlAstTraverser for PathConvertor {
         Ok(())
     }
 
-    fn traverse_insert(&mut self, insert: &mut InsertStatementViewMutable) -> TraversalResult {
-        self.pre_visit_insert(insert)?;
-
-        let InsertStatementViewMutable {
-            columns: _,
-            table_name: _,
-            table_alias: _,
-            ignore: _,
-            into: _,
-            or: _,
-            overwrite: _,
-            replace_into: _,
-            table: _,
-            source,
-            after_columns: _,
-            on,
-            partitioned,
-            priority: _,
-            returning,
-        } = insert;
-
-        if partitioned.is_some() {
-            return Err("not implemented: Insert::partitioned".to_string());
-        }
-
-        if returning.is_some() {
-            return Err("not implemented: Insert::returning".to_string());
-        }
-
-        source
-            .as_mut()
-            .map(|s| self.traverse_ast_query(s))
-            .unwrap_or(Ok(()))?;
-
-        self.traverse_on_insert(on)?;
-
-        self.post_visit_insert(insert)
-    }
-
-    fn traverse_on_insert(&mut self, on_insert: &mut Option<OnInsert>) -> TraversalResult {
-        self.pre_visit_on_insert(on_insert)?;
-
-        match on_insert {
-            Some(OnInsert::OnConflict(on_conflict)) => self.traverse_on_conflict(on_conflict),
-            None => Ok(()),
-
-            Some(OnInsert::DuplicateKeyUpdate(..)) => {
-                Err("not implemented: OnInsert::DuplicateKeyUpdate".to_string())
-            }
-
-            &mut Some(_) => Err("Unrecognized OnInsert variant".to_string()),
-        }?;
-
-        self.post_visit_on_insert(on_insert)
-    }
-
     fn traverse_on_conflict(&mut self, on_conflict: &mut OnConflict) -> TraversalResult {
         self.pre_visit_on_conflict(on_conflict)?;
 
