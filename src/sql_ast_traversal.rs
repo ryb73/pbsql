@@ -97,6 +97,118 @@ impl SqlAstTraverser for PathConvertor {
         Ok(())
     }
 
+    fn pre_visit_create_table(
+        &mut self,
+        create_table: &mut CreateTableStatementViewMutable,
+    ) -> VisitResult {
+        let CreateTableStatementViewMutable {
+            if_not_exists: _,
+            name: _,
+            columns: _,
+            auto_increment_offset: _,
+            clone,
+            cluster_by,
+            collation: _,
+            comment,
+            constraints: _,
+            default_charset: _,
+            engine,
+            external,
+            file_format,
+            global,
+            hive_distribution,
+            hive_formats,
+            like,
+            location,
+            on_cluster,
+            on_commit: _,
+            options: _,
+            or_replace: _,
+            order_by,
+            partition_by: _,
+            query: _,
+            strict: _,
+            table_properties: _,
+            temporary,
+            transient,
+            with_options: _,
+            without_rowid,
+        } = create_table;
+
+        if clone.is_some() {
+            return Err("not implemented: CreateTable::clone".to_string());
+        }
+
+        if cluster_by.is_some() {
+            return Err("not implemented: CreateTable::cluster_by".to_string());
+        }
+
+        if comment.is_some() {
+            return Err("not implemented: CreateTable::comment".to_string());
+        }
+
+        if engine.is_some() {
+            return Err("not implemented: CreateTable::engine".to_string());
+        }
+
+        if **external {
+            return Err("not implemented: CreateTable::external".to_string());
+        }
+
+        if file_format.is_some() {
+            return Err("not implemented: CreateTable::file_format".to_string());
+        }
+
+        if global.is_some() {
+            return Err("not implemented: CreateTable::global".to_string());
+        }
+
+        if **hive_distribution != HiveDistributionStyle::NONE {
+            return Err("not implemented: CreateTable::hive_distribution".to_string());
+        }
+
+        if let Some(HiveFormat {
+            location,
+            row_format,
+            storage,
+        }) = hive_formats
+        {
+            if location.is_some() || row_format.is_some() || storage.is_some() {
+                return Err("not implemented: CreateTable::hive_formats".to_string());
+            }
+        }
+
+        if like.is_some() {
+            return Err("not implemented: CreateTable::like".to_string());
+        }
+
+        if location.is_some() {
+            return Err("not implemented: CreateTable::location".to_string());
+        }
+
+        if on_cluster.is_some() {
+            return Err("not implemented: CreateTable::on_cluster".to_string());
+        }
+
+        if order_by.is_some() {
+            return Err("not implemented: CreateTable::order_by".to_string());
+        }
+
+        if **temporary {
+            return Err("not implemented: CreateTable::temporary".to_string());
+        }
+
+        if **transient {
+            return Err("not implemented CreateTable::transient".to_string());
+        }
+
+        if **without_rowid {
+            return Err("not implemented: CreateTable::without_rowid".to_string());
+        }
+
+        Ok(())
+    }
+
     fn post_visit_create_table(
         &mut self,
         create_table: &mut CreateTableStatementViewMutable,
@@ -313,96 +425,41 @@ impl SqlAstTraverser for PathConvertor {
         self.pre_visit_create_table(create_table)?;
 
         let CreateTableStatementViewMutable {
-            if_not_exists: _,
-            name: _,
-            columns: _,
             auto_increment_offset: _,
-            clone,
-            cluster_by,
+            clone: _,
+            cluster_by: _,
             collation: _,
-            comment,
+            columns: _,
+            comment: _,
             constraints,
             default_charset: _,
-            engine,
-            external,
-            file_format,
-            global,
-            hive_distribution,
-            hive_formats,
-            like,
-            location,
-            on_cluster,
+            engine: _,
+            external: _,
+            file_format: _,
+            global: _,
+            hive_distribution: _,
+            hive_formats: _,
+            if_not_exists: _,
+            like: _,
+            location: _,
+            name: _,
+            on_cluster: _,
             on_commit,
             options,
             or_replace: _,
-            order_by,
+            order_by: _,
             partition_by,
             query,
             strict: _,
             table_properties,
-            temporary,
-            transient,
+            temporary: _,
+            transient: _,
             with_options,
-            without_rowid,
+            without_rowid: _,
         } = create_table;
-
-        if clone.is_some() {
-            return Err("not implemented: CreateTable::clone".to_string());
-        }
-
-        if cluster_by.is_some() {
-            return Err("not implemented: CreateTable::cluster_by".to_string());
-        }
-
-        if comment.is_some() {
-            return Err("not implemented: CreateTable::comment".to_string());
-        }
 
         if !constraints.is_empty() {
             return Err("not implemented: CreateTable::constraints".to_string());
-        }
-
-        if engine.is_some() {
-            return Err("not implemented: CreateTable::engine".to_string());
-        }
-
-        if **external {
-            return Err("not implemented: CreateTable::external".to_string());
-        }
-
-        if file_format.is_some() {
-            return Err("not implemented: CreateTable::file_format".to_string());
-        }
-
-        if global.is_some() {
-            return Err("not implemented: CreateTable::global".to_string());
-        }
-
-        if **hive_distribution != HiveDistributionStyle::NONE {
-            return Err("not implemented: CreateTable::hive_distribution".to_string());
-        }
-
-        if let Some(HiveFormat {
-            location,
-            row_format,
-            storage,
-        }) = hive_formats
-        {
-            if location.is_some() || row_format.is_some() || storage.is_some() {
-                return Err("not implemented: CreateTable::hive_formats".to_string());
-            }
-        }
-
-        if like.is_some() {
-            return Err("not implemented: CreateTable::like".to_string());
-        }
-
-        if location.is_some() {
-            return Err("not implemented: CreateTable::location".to_string());
-        }
-
-        if on_cluster.is_some() {
-            return Err("not implemented: CreateTable::on_cluster".to_string());
         }
 
         if on_commit.is_some() {
@@ -411,10 +468,6 @@ impl SqlAstTraverser for PathConvertor {
 
         if options.is_some() {
             return Err("not implemented: CreateTable::options".to_string());
-        }
-
-        if order_by.is_some() {
-            return Err("not implemented: CreateTable::order_by".to_string());
         }
 
         if partition_by.is_some() {
@@ -429,20 +482,8 @@ impl SqlAstTraverser for PathConvertor {
             return Err("not implemented: CreateTable::table_properties".to_string());
         }
 
-        if **temporary {
-            return Err("not implemented: CreateTable::temporary".to_string());
-        }
-
-        if **transient {
-            return Err("not implemented CreateTable::transient".to_string());
-        }
-
         if !with_options.is_empty() {
             return Err("not implemented: CreateTable::with_options".to_string());
-        }
-
-        if **without_rowid {
-            return Err("not implemented: CreateTable::without_rowid".to_string());
         }
 
         self.post_visit_create_table(create_table)
