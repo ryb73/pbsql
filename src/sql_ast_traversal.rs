@@ -484,17 +484,26 @@ impl SqlAstTraverser for PathConvertor {
         Ok(())
     }
 
-    fn traverse_on_conflict(&mut self, on_conflict: &mut OnConflict) -> TraversalResult {
-        self.pre_visit_on_conflict(on_conflict)?;
-
+    fn pre_visit_on_conflict(&mut self, on_conflict: &mut OnConflict) -> VisitResult {
         let OnConflict {
-            action,
+            action: _,
             conflict_target,
         } = on_conflict;
 
         if conflict_target.is_some() {
             return Err("not implemented: OnConflict::conflict_target".to_string());
         }
+
+        Ok(())
+    }
+
+    fn traverse_on_conflict(&mut self, on_conflict: &mut OnConflict) -> TraversalResult {
+        self.pre_visit_on_conflict(on_conflict)?;
+
+        let OnConflict {
+            action,
+            conflict_target: _,
+        } = on_conflict;
 
         match action {
             OnConflictAction::DoNothing => Ok(()),
