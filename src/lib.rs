@@ -1,7 +1,7 @@
 mod sql_ast_traversal;
 
 use serde::Serialize;
-use sql_ast_traversal::*;
+use sql_ast_traversal::{DatabaseNamesByPath, PathConvertor, SqlAstTraverser};
 use sqlparser::{dialect::SQLiteDialect, parser::Parser};
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 
