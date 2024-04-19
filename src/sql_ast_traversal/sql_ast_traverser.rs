@@ -329,7 +329,6 @@ pub trait SqlAstTraverser<Error = String> {
         Ok(())
     }
 
-    fn new() -> Self;
     fn traverse(&mut self, ast: &mut Vec<Statement>) -> TraversalResult;
     fn traverse_statement(&mut self, statement: &mut Statement) -> TraversalResult;
     fn traverse_drop(&mut self, drop: &mut DropStatementViewMutable) -> TraversalResult;

@@ -47,14 +47,16 @@ pub struct PathConvertor {
     scopes: Vec<Scope>,
 }
 
-impl SqlAstTraverser for PathConvertor {
-    fn new() -> Self {
+impl PathConvertor {
+    pub fn new() -> Self {
         PathConvertor {
             database_names: HashMap::new(),
             scopes: vec![Scope::new()],
         }
     }
+}
 
+impl SqlAstTraverser for PathConvertor {
     fn post_visit_drop(&mut self, drop: &mut DropStatementViewMutable) -> VisitResult {
         let DropStatementViewMutable {
             cascade: _,
