@@ -25,7 +25,22 @@ type ReferencableTables = HashMap<TableReference, ReplacementIdentifiers>;
 
 pub type VisitResult = Result<(), String>;
 
-pub trait VisitorMut {
+#[derive(Debug)]
+struct Scope {
+    referencable_tables: ReferencableTables,
+}
+
+impl Scope {
+    fn new() -> Self {
+        Scope {
+            referencable_tables: HashMap::new(),
+        }
+    }
+}
+
+type TraversalResult = Result<(), String>;
+
+pub trait SqlAstTraverser<Error = String> {
     fn pre_visit_create_table(
         &mut self,
         _create_table: &mut CreateTableStatementViewMutable,
@@ -340,23 +355,81 @@ pub trait VisitorMut {
     fn visit_value_placeholder(&mut self, _value: &mut String) -> VisitResult {
         Ok(())
     }
+
+    fn new() -> Self;
+    fn traverse(&mut self, ast: &mut Vec<Statement>) -> TraversalResult;
+    fn traverse_statement(&mut self, statement: &mut Statement) -> TraversalResult;
+    fn traverse_drop(&mut self, drop: &mut DropStatementViewMutable) -> TraversalResult;
+    fn traverse_update(&mut self, update: &mut UpdateStatementViewMutable) -> TraversalResult;
+    fn traverse_assignment(&mut self, assignment: &mut Assignment) -> TraversalResult;
+    fn traverse_create_table(
+        &mut self,
+        create_table: &mut CreateTableStatementViewMutable,
+    ) -> TraversalResult;
+    fn traverse_create_index(
+        &mut self,
+        create_index: &mut CreateIndexStatementViewMutable,
+    ) -> TraversalResult;
+    fn traverse_insert(&mut self, insert: &mut InsertStatementViewMutable) -> TraversalResult;
+    fn traverse_on_insert(&mut self, on_insert: &mut Option<OnInsert>) -> TraversalResult;
+    fn traverse_on_conflict(&mut self, on_conflict: &mut OnConflict) -> TraversalResult;
+    fn traverse_ast_query(&mut self, query: &mut Box<ast::Query>) -> TraversalResult;
+    fn traverse_offset(&mut self, offset: &mut Offset) -> TraversalResult;
+    fn traverse_order_by_expr(&mut self, expr: &mut OrderByExpr) -> TraversalResult;
+    fn traverse_set_expr(&mut self, body: &mut SetExpr) -> TraversalResult;
+    fn traverse_set_operation(&mut self, body: &mut SetOperationViewMutable) -> TraversalResult;
+    fn traverse_table_with_joins(
+        &mut self,
+        table_with_joins: &mut TableWithJoins,
+    ) -> TraversalResult;
+    fn traverse_join(&mut self, join: &mut Join) -> TraversalResult;
+    fn traverse_join_operator(&mut self, join_operator: &mut JoinOperator) -> TraversalResult;
+    fn traverse_join_constraint(&mut self, constraint: &mut JoinConstraint) -> TraversalResult;
+    fn traverse_table_factor(&mut self, relation: &mut TableFactor) -> TraversalResult;
+    fn traverse_table_factor_derived(
+        &mut self,
+        relation: &mut TableFactorDerivedViewMut,
+    ) -> TraversalResult;
+    fn traverse_table_factor_table(
+        &mut self,
+        relation: &mut TableFactorTableViewMut,
+    ) -> TraversalResult;
+    fn traverse_select_tables(&mut self, tables: &mut Vec<TableWithJoins>) -> TraversalResult;
+    fn traverse_select(&mut self, select: &mut Box<Select>) -> TraversalResult;
+    fn traverse_select_item(&mut self, select_item: &mut SelectItem) -> TraversalResult;
+    fn traverse_expr(&mut self, expr: &mut Expr) -> TraversalResult;
+    fn traverse_compound_identifier(&mut self, identifiers: &mut Vec<Ident>) -> TraversalResult;
+    fn traverse_in_subquery(
+        &mut self,
+        in_subquery: &mut InSubqueryExprViewMutable,
+    ) -> TraversalResult;
+    fn traverse_function(&mut self, func: &mut Function) -> TraversalResult;
+    fn traverse_function_arg(&mut self, function_arg: &mut FunctionArg) -> TraversalResult;
+    fn traverse_function_arg_expr(
+        &mut self,
+        function_arg_expr: &mut FunctionArgExpr,
+    ) -> TraversalResult;
+    fn traverse_wildcard_additional_options(
+        &mut self,
+        wildcard_additional_options: &mut WildcardAdditionalOptions,
+    ) -> TraversalResult;
+    fn traverse_value(&mut self, value: &mut Value) -> TraversalResult;
+    fn traverse_value_placeholder(&mut self, value: &mut String) -> TraversalResult;
 }
 
-pub struct MyFirstVisitor {
+pub struct PathConvertor {
     pub database_names: DatabaseNamesByPath,
     scopes: Vec<Scope>,
 }
 
-impl MyFirstVisitor {
-    pub fn new() -> Self {
-        MyFirstVisitor {
+impl SqlAstTraverser for PathConvertor {
+    fn new() -> Self {
+        PathConvertor {
             database_names: HashMap::new(),
-            scopes: vec![],
+            scopes: vec![Scope::new()],
         }
     }
-}
 
-impl VisitorMut for MyFirstVisitor {
     fn post_visit_drop(&mut self, drop: &mut DropStatementViewMutable) -> VisitResult {
         let DropStatementViewMutable {
             cascade: _,
@@ -567,97 +640,9 @@ impl VisitorMut for MyFirstVisitor {
             Err(format!("Unhandled value: Value::Placeholder({})", value))
         }
     }
-}
-
-#[derive(Debug)]
-struct Scope {
-    referencable_tables: ReferencableTables,
-}
-
-impl Scope {
-    fn new() -> Self {
-        Scope {
-            referencable_tables: HashMap::new(),
-        }
-    }
-}
-
-type TraversalResult = Result<(), String>;
-
-pub trait SqlAstTraverser<'a, Error> {
-    fn get_visitor(&mut self) -> &mut dyn VisitorMut;
-    fn new(visitor: &'a mut dyn VisitorMut) -> Self;
-    fn traverse(&mut self, ast: &mut Vec<Statement>) -> TraversalResult;
-    fn traverse_statement(&mut self, statement: &mut Statement) -> TraversalResult;
-    fn traverse_drop(&mut self, drop: &mut DropStatementViewMutable) -> TraversalResult;
-    fn traverse_update(&mut self, update: &mut UpdateStatementViewMutable) -> TraversalResult;
-    fn traverse_assignment(&mut self, assignment: &mut Assignment) -> TraversalResult;
-    fn traverse_create_table(
-        &mut self,
-        create_table: &mut CreateTableStatementViewMutable,
-    ) -> TraversalResult;
-    fn traverse_create_index(
-        &mut self,
-        create_index: &mut CreateIndexStatementViewMutable,
-    ) -> TraversalResult;
-    fn traverse_insert(&mut self, insert: &mut InsertStatementViewMutable) -> TraversalResult;
-    fn traverse_on_insert(&mut self, on_insert: &mut Option<OnInsert>) -> TraversalResult;
-    fn traverse_on_conflict(&mut self, on_conflict: &mut OnConflict) -> TraversalResult;
-    fn traverse_ast_query(&mut self, query: &mut Box<ast::Query>) -> TraversalResult;
-    fn traverse_offset(&mut self, offset: &mut Offset) -> TraversalResult;
-    fn traverse_order_by_expr(&mut self, expr: &mut OrderByExpr) -> TraversalResult;
-    fn traverse_set_expr(&mut self, body: &mut SetExpr) -> TraversalResult;
-    fn traverse_set_operation(&mut self, body: &mut SetOperationViewMutable) -> TraversalResult;
-    fn traverse_table_with_joins(
-        &mut self,
-        table_with_joins: &mut TableWithJoins,
-    ) -> TraversalResult;
-    fn traverse_join(&mut self, join: &mut Join) -> TraversalResult;
-    fn traverse_join_operator(&mut self, join_operator: &mut JoinOperator) -> TraversalResult;
-    fn traverse_join_constraint(&mut self, constraint: &mut JoinConstraint) -> TraversalResult;
-    fn traverse_table_factor(&mut self, relation: &mut TableFactor) -> TraversalResult;
-    fn traverse_table_factor_derived(
-        &mut self,
-        relation: &mut TableFactorDerivedViewMut,
-    ) -> TraversalResult;
-    fn traverse_table_factor_table(
-        &mut self,
-        relation: &mut TableFactorTableViewMut,
-    ) -> TraversalResult;
-    fn traverse_select_tables(&mut self, tables: &mut Vec<TableWithJoins>) -> TraversalResult;
-    fn traverse_select(&mut self, select: &mut Box<Select>) -> TraversalResult;
-    fn traverse_select_item(&mut self, select_item: &mut SelectItem) -> TraversalResult;
-    fn traverse_expr(&mut self, expr: &mut Expr) -> TraversalResult;
-    fn traverse_compound_identifier(&mut self, identifiers: &mut Vec<Ident>) -> TraversalResult;
-    fn traverse_in_subquery(
-        &mut self,
-        in_subquery: &mut InSubqueryExprViewMutable,
-    ) -> TraversalResult;
-    fn traverse_function(&mut self, func: &mut Function) -> TraversalResult;
-    fn traverse_function_arg(&mut self, function_arg: &mut FunctionArg) -> TraversalResult;
-    fn traverse_function_arg_expr(
-        &mut self,
-        function_arg_expr: &mut FunctionArgExpr,
-    ) -> TraversalResult;
-    fn traverse_wildcard_additional_options(
-        &mut self,
-        wildcard_additional_options: &mut WildcardAdditionalOptions,
-    ) -> TraversalResult;
-    fn traverse_value(&mut self, value: &mut Value) -> TraversalResult;
-    fn traverse_value_placeholder(&mut self, value: &mut String) -> TraversalResult;
-}
-
-pub struct PathConvertor<'a> {
-    visitor: &'a mut dyn VisitorMut,
-}
-
-impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
-    fn new(visitor: &'a mut dyn VisitorMut) -> Self {
-        PathConvertor { visitor }
-    }
 
     fn traverse_statement(&mut self, statement: &mut Statement) -> TraversalResult {
-        self.visitor.pre_visit_statement(statement)?;
+        self.pre_visit_statement(statement)?;
 
         match statement {
             CreateTable { .. } => self.traverse_create_table(&mut statement.try_into().unwrap()),
@@ -801,7 +786,7 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
             }
         }?;
 
-        self.visitor.post_visit_statement(statement)
+        self.post_visit_statement(statement)
     }
 
     fn traverse(&mut self, ast: &mut Vec<Statement>) -> TraversalResult {
@@ -811,7 +796,7 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
     }
 
     fn traverse_drop(&mut self, drop: &mut DropStatementViewMutable) -> TraversalResult {
-        self.visitor.pre_visit_drop(drop)?;
+        self.pre_visit_drop(drop)?;
 
         let DropStatementViewMutable {
             cascade,
@@ -849,11 +834,11 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
             Err("not implemented: Statement::Drop::temporary".to_string())?;
         };
 
-        self.visitor.post_visit_drop(drop)
+        self.post_visit_drop(drop)
     }
 
     fn traverse_update(&mut self, update: &mut UpdateStatementViewMutable) -> TraversalResult {
-        self.visitor.pre_visit_update(update)?;
+        self.pre_visit_update(update)?;
 
         let UpdateStatementViewMutable {
             assignments,
@@ -883,23 +868,23 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
             .map(|s| self.traverse_expr(s))
             .transpose()?;
 
-        self.visitor.post_visit_update(update)
+        self.post_visit_update(update)
     }
 
     fn traverse_assignment(&mut self, assignment: &mut Assignment) -> TraversalResult {
-        self.visitor.pre_visit_assignment(assignment)?;
+        self.pre_visit_assignment(assignment)?;
 
         let Assignment { id: _, value } = assignment;
         self.traverse_expr(value)?;
 
-        self.visitor.post_visit_assignment(assignment)
+        self.post_visit_assignment(assignment)
     }
 
     fn traverse_create_table(
         &mut self,
         create_table: &mut CreateTableStatementViewMutable,
     ) -> TraversalResult {
-        self.visitor.pre_visit_create_table(create_table)?;
+        self.pre_visit_create_table(create_table)?;
 
         let CreateTableStatementViewMutable {
             if_not_exists: _,
@@ -1034,14 +1019,14 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
             return Err("not implemented: CreateTable::without_rowid".to_string());
         }
 
-        self.visitor.post_visit_create_table(create_table)
+        self.post_visit_create_table(create_table)
     }
 
     fn traverse_create_index(
         &mut self,
         create_index: &mut CreateIndexStatementViewMutable,
     ) -> TraversalResult {
-        self.visitor.pre_visit_create_index(create_index)?;
+        self.pre_visit_create_index(create_index)?;
 
         let CreateIndexStatementViewMutable {
             columns,
@@ -1081,11 +1066,11 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
             .map(|c| self.traverse_order_by_expr(c))
             .collect::<Result<Vec<_>, _>>()?;
 
-        self.visitor.post_visit_create_index(create_index)
+        self.post_visit_create_index(create_index)
     }
 
     fn traverse_insert(&mut self, insert: &mut InsertStatementViewMutable) -> TraversalResult {
-        self.visitor.pre_visit_insert(insert)?;
+        self.pre_visit_insert(insert)?;
 
         let InsertStatementViewMutable {
             columns: _,
@@ -1129,11 +1114,11 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
 
         self.traverse_on_insert(on)?;
 
-        self.visitor.post_visit_insert(insert)
+        self.post_visit_insert(insert)
     }
 
     fn traverse_on_insert(&mut self, on_insert: &mut Option<OnInsert>) -> TraversalResult {
-        self.visitor.pre_visit_on_insert(on_insert)?;
+        self.pre_visit_on_insert(on_insert)?;
 
         match on_insert {
             Some(OnInsert::OnConflict(on_conflict)) => self.traverse_on_conflict(on_conflict),
@@ -1146,11 +1131,11 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
             &mut Some(_) => Err("Unrecognized OnInsert variant".to_string()),
         }?;
 
-        self.visitor.post_visit_on_insert(on_insert)
+        self.post_visit_on_insert(on_insert)
     }
 
     fn traverse_on_conflict(&mut self, on_conflict: &mut OnConflict) -> TraversalResult {
-        self.visitor.pre_visit_on_conflict(on_conflict)?;
+        self.pre_visit_on_conflict(on_conflict)?;
 
         let OnConflict {
             action,
@@ -1169,11 +1154,11 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
             }
         }?;
 
-        self.visitor.post_visit_on_conflict(on_conflict)
+        self.post_visit_on_conflict(on_conflict)
     }
 
     fn traverse_ast_query(&mut self, query: &mut Box<ast::Query>) -> TraversalResult {
-        self.visitor.pre_visit_ast_query(query)?;
+        self.pre_visit_ast_query(query)?;
 
         let ast::Query {
             body,
@@ -1221,20 +1206,20 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
 
         limit.as_mut().map(|l| self.traverse_expr(l)).transpose()?;
 
-        self.visitor.post_visit_ast_query(query)
+        self.post_visit_ast_query(query)
     }
 
     fn traverse_offset(&mut self, offset: &mut Offset) -> TraversalResult {
-        self.visitor.pre_visit_offset(offset)?;
+        self.pre_visit_offset(offset)?;
 
         let Offset { value, rows: _ } = offset;
         self.traverse_expr(value)?;
 
-        self.visitor.post_visit_offset(offset)
+        self.post_visit_offset(offset)
     }
 
     fn traverse_order_by_expr(&mut self, order_by_expr: &mut OrderByExpr) -> TraversalResult {
-        self.visitor.pre_visit_order_by_expr(order_by_expr)?;
+        self.pre_visit_order_by_expr(order_by_expr)?;
 
         let OrderByExpr {
             expr,
@@ -1243,11 +1228,11 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
         } = order_by_expr;
         self.traverse_expr(expr)?;
 
-        self.visitor.post_visit_order_by_expr(order_by_expr)
+        self.post_visit_order_by_expr(order_by_expr)
     }
 
     fn traverse_set_expr(&mut self, body: &mut SetExpr) -> TraversalResult {
-        self.visitor.pre_visit_set_expr(body)?;
+        self.pre_visit_set_expr(body)?;
 
         match body {
             SetExpr::Values(Values {
@@ -1276,29 +1261,29 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
             SetExpr::Table(_) => Err("not implemented: SetExpr::Table".to_string()),
         }?;
 
-        self.visitor.post_visit_set_expr(body)
+        self.post_visit_set_expr(body)
     }
 
     fn traverse_set_operation(
         &mut self,
         set_operation: &mut SetOperationViewMutable,
     ) -> TraversalResult {
-        self.visitor.pre_visit_set_operation_left(set_operation)?;
+        self.pre_visit_set_operation_left(set_operation)?;
 
         self.traverse_set_expr(set_operation.left)?;
 
-        self.visitor.pre_visit_set_operation_right(set_operation)?;
+        self.pre_visit_set_operation_right(set_operation)?;
 
         self.traverse_set_expr(set_operation.right)?;
 
-        self.visitor.post_visit_set_operation(set_operation)
+        self.post_visit_set_operation(set_operation)
     }
 
     fn traverse_table_with_joins(
         &mut self,
         table_with_joins: &mut TableWithJoins,
     ) -> TraversalResult {
-        self.visitor.pre_visit_table_with_joins(table_with_joins)?;
+        self.pre_visit_table_with_joins(table_with_joins)?;
 
         let TableWithJoins { relation, joins } = table_with_joins;
 
@@ -1309,11 +1294,11 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
             .map(|join| self.traverse_join(join))
             .collect::<Result<Vec<_>, _>>()?;
 
-        self.visitor.post_visit_table_with_joins(table_with_joins)
+        self.post_visit_table_with_joins(table_with_joins)
     }
 
     fn traverse_join(&mut self, join: &mut Join) -> TraversalResult {
-        self.visitor.pre_visit_join(join)?;
+        self.pre_visit_join(join)?;
 
         match join {
             Join {
@@ -1326,11 +1311,11 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
             }
         }?;
 
-        self.visitor.post_visit_join(join)
+        self.post_visit_join(join)
     }
 
     fn traverse_join_operator(&mut self, join_operator: &mut JoinOperator) -> TraversalResult {
-        self.visitor.pre_visit_join_operator(join_operator)?;
+        self.pre_visit_join_operator(join_operator)?;
 
         match join_operator {
             JoinOperator::Inner(constraint) => self.traverse_join_constraint(constraint),
@@ -1347,11 +1332,11 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
             JoinOperator::OuterApply => Ok(()),
         }?;
 
-        self.visitor.post_visit_join_operator(join_operator)
+        self.post_visit_join_operator(join_operator)
     }
 
     fn traverse_join_constraint(&mut self, constraint: &mut JoinConstraint) -> TraversalResult {
-        self.visitor.pre_visit_join_constraint(constraint)?;
+        self.pre_visit_join_constraint(constraint)?;
 
         match constraint {
             JoinConstraint::On(expr) => self.traverse_expr(expr),
@@ -1361,11 +1346,11 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
             JoinConstraint::Using(_) => Err("not implemented: JoinConstraint::Using".to_string()),
         }?;
 
-        self.visitor.post_visit_join_constraint(constraint)
+        self.post_visit_join_constraint(constraint)
     }
 
     fn traverse_table_factor(&mut self, relation: &mut TableFactor) -> TraversalResult {
-        self.visitor.pre_visit_table_factor(relation)?;
+        self.pre_visit_table_factor(relation)?;
 
         match relation {
             TableFactor::Table { .. } => {
@@ -1392,14 +1377,14 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
             TableFactor::Unpivot { .. } => Err("not implemented: TableFactor::Unpivot".to_string()),
         }?;
 
-        self.visitor.post_visit_table_factor(relation)
+        self.post_visit_table_factor(relation)
     }
 
     fn traverse_table_factor_table(
         &mut self,
         relation: &mut TableFactorTableViewMut,
     ) -> TraversalResult {
-        self.visitor.pre_visit_table_factor_table(relation)?;
+        self.pre_visit_table_factor_table(relation)?;
 
         let TableFactorTableViewMut {
             alias: _,
@@ -1426,15 +1411,14 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
             return Err("not implemented: TableFactor::Table::with_hints".to_string());
         }
 
-        self.visitor.post_visit_table_factor_table(relation)
+        self.post_visit_table_factor_table(relation)
     }
 
     fn traverse_table_factor_derived(
         &mut self,
         derived_table_factor_view: &mut TableFactorDerivedViewMut,
     ) -> TraversalResult {
-        self.visitor
-            .pre_visit_table_factor_derived(derived_table_factor_view)?;
+        self.pre_visit_table_factor_derived(derived_table_factor_view)?;
 
         let TableFactorDerivedViewMut {
             lateral: _,
@@ -1444,23 +1428,22 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
 
         self.traverse_ast_query(subquery)?;
 
-        self.visitor
-            .post_visit_table_factor_derived(derived_table_factor_view)
+        self.post_visit_table_factor_derived(derived_table_factor_view)
     }
 
     fn traverse_select_tables(&mut self, tables: &mut Vec<TableWithJoins>) -> TraversalResult {
-        self.visitor.pre_visit_select_tables(tables)?;
+        self.pre_visit_select_tables(tables)?;
 
         tables
             .iter_mut()
             .map(|t| self.traverse_table_with_joins(t))
             .collect::<Result<Vec<_>, String>>()?;
 
-        self.visitor.post_visit_select_tables(tables)
+        self.post_visit_select_tables(tables)
     }
 
     fn traverse_select(&mut self, select: &mut Box<Select>) -> TraversalResult {
-        self.visitor.pre_visit_select(select)?;
+        self.pre_visit_select(select)?;
 
         let Select {
             cluster_by,
@@ -1542,11 +1525,11 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
             GroupByExpr::All => return Err("not implemented: GroupByExpr::All".to_string()),
         };
 
-        self.visitor.post_visit_select(select)
+        self.post_visit_select(select)
     }
 
     fn traverse_select_item(&mut self, select_item: &mut SelectItem) -> TraversalResult {
-        self.visitor.pre_visit_select_item(select_item)?;
+        self.pre_visit_select_item(select_item)?;
 
         match select_item {
             SelectItem::UnnamedExpr(expr) => self.traverse_expr(expr),
@@ -1560,15 +1543,14 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
             }
         }?;
 
-        self.visitor.post_visit_select_item(select_item)
+        self.post_visit_select_item(select_item)
     }
 
     fn traverse_wildcard_additional_options(
         &mut self,
         wildcard_additional_options: &mut WildcardAdditionalOptions,
     ) -> TraversalResult {
-        self.visitor
-            .pre_visit_wildcard_additional_options(wildcard_additional_options)?;
+        self.pre_visit_wildcard_additional_options(wildcard_additional_options)?;
 
         let WildcardAdditionalOptions {
             opt_except,
@@ -1593,18 +1575,17 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
             return Err("not implemented: WildcardAdditionalOptions::opt_replace".to_string());
         }
 
-        self.visitor
-            .post_visit_wildcard_additional_options(wildcard_additional_options)
+        self.post_visit_wildcard_additional_options(wildcard_additional_options)
     }
 
     fn traverse_compound_identifier(&mut self, identifiers: &mut Vec<Ident>) -> TraversalResult {
         // TODO: pre and post not necessary
-        self.visitor.pre_visit_compound_identifier(identifiers)?;
-        self.visitor.post_visit_compound_identifier(identifiers)
+        self.pre_visit_compound_identifier(identifiers)?;
+        self.post_visit_compound_identifier(identifiers)
     }
 
     fn traverse_expr(&mut self, expr: &mut Expr) -> TraversalResult {
-        self.visitor.pre_visit_expr(expr)?;
+        self.pre_visit_expr(expr)?;
 
         match expr {
             Expr::Value(value) => self.traverse_value(value),
@@ -1687,14 +1668,14 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
             }
         }?;
 
-        self.visitor.post_visit_expr(expr)
+        self.post_visit_expr(expr)
     }
 
     fn traverse_in_subquery(
         &mut self,
         in_subquery: &mut InSubqueryExprViewMutable,
     ) -> TraversalResult {
-        self.visitor.pre_visit_in_subquery(in_subquery)?;
+        self.pre_visit_in_subquery(in_subquery)?;
 
         let InSubqueryExprViewMutable {
             expr,
@@ -1706,11 +1687,11 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
 
         self.traverse_ast_query(subquery)?;
 
-        self.visitor.post_visit_in_subquery(in_subquery)
+        self.post_visit_in_subquery(in_subquery)
     }
 
     fn traverse_function(&mut self, func: &mut Function) -> TraversalResult {
-        self.visitor.pre_visit_function(func)?;
+        self.pre_visit_function(func)?;
 
         let Function {
             args,
@@ -1750,11 +1731,11 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
             .map(|arg| self.traverse_function_arg(arg))
             .collect::<Result<Vec<_>, _>>()?;
 
-        self.visitor.post_visit_function(func)
+        self.post_visit_function(func)
     }
 
     fn traverse_function_arg(&mut self, function_arg: &mut FunctionArg) -> TraversalResult {
-        self.visitor.pre_visit_function_arg(function_arg)?;
+        self.pre_visit_function_arg(function_arg)?;
 
         match function_arg {
             FunctionArg::Unnamed(function_arg_expr) => {
@@ -1764,15 +1745,14 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
             FunctionArg::Named { .. } => Err("Unhandled syntax: FunctionArg::Named".to_string()),
         }?;
 
-        self.visitor.post_visit_function_arg(function_arg)
+        self.post_visit_function_arg(function_arg)
     }
 
     fn traverse_function_arg_expr(
         &mut self,
         function_arg_expr: &mut FunctionArgExpr,
     ) -> TraversalResult {
-        self.visitor
-            .pre_visit_function_arg_expr(function_arg_expr)?;
+        self.pre_visit_function_arg_expr(function_arg_expr)?;
 
         match function_arg_expr {
             FunctionArgExpr::Expr(expr) => self.traverse_expr(expr),
@@ -1783,11 +1763,11 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
             }
         }?;
 
-        self.visitor.post_visit_function_arg_expr(function_arg_expr)
+        self.post_visit_function_arg_expr(function_arg_expr)
     }
 
     fn traverse_value(&mut self, value: &mut Value) -> TraversalResult {
-        self.visitor.pre_visit_value(value)?;
+        self.pre_visit_value(value)?;
 
         match value {
             Value::Placeholder(s) => self.traverse_value_placeholder(s),
@@ -1823,15 +1803,11 @@ impl<'a> SqlAstTraverser<'a, String> for PathConvertor<'a> {
             Value::UnQuotedString(_) => Err("Unhandled value: Value::UnQuotedString".to_string()),
         }?;
 
-        self.visitor.post_visit_value(value)
-    }
-
-    fn get_visitor(&mut self) -> &mut dyn VisitorMut {
-        self.visitor
+        self.post_visit_value(value)
     }
 
     fn traverse_value_placeholder(&mut self, value: &mut String) -> TraversalResult {
-        self.visitor.visit_value_placeholder(value)
+        self.visit_value_placeholder(value)
     }
 }
 

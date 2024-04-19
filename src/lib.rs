@@ -26,14 +26,12 @@ fn translate_sql(query: &str) -> Result<TranslatedQuery<Vec<String>>, String> {
 
     // println!("AST: {:#?}", ast);
 
-    let mut ast_visitor = MyFirstVisitor::new();
-
-    let mut path_convertor = PathConvertor::new(&mut ast_visitor);
+    let mut path_convertor = PathConvertor::new();
 
     path_convertor.traverse(&mut ast)?;
 
     Ok(TranslatedQuery {
-        databases: ast_visitor.database_names,
+        databases: path_convertor.database_names,
         query: ast.iter().map(|s| s.to_string()).collect(),
     })
 }
