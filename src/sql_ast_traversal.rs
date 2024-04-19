@@ -266,9 +266,7 @@ impl SqlAstTraverser for PathConvertor {
         }
     }
 
-    fn traverse_drop(&mut self, drop: &mut DropStatementViewMutable) -> TraversalResult {
-        self.pre_visit_drop(drop)?;
-
+    fn pre_visit_drop(&mut self, drop: &mut DropStatementViewMutable) -> VisitResult {
         let DropStatementViewMutable {
             cascade,
             if_exists: _,
@@ -305,6 +303,12 @@ impl SqlAstTraverser for PathConvertor {
             Err("not implemented: Statement::Drop::temporary".to_string())?;
         };
 
+        Ok(())
+    }
+
+    fn traverse_drop(&mut self, drop: &mut DropStatementViewMutable) -> TraversalResult {
+        // TODO: pre and post not necessary
+        self.pre_visit_drop(drop)?;
         self.post_visit_drop(drop)
     }
 
