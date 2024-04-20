@@ -1,8 +1,9 @@
 use sqlparser::ast::{
     self, Assignment, Expr, Function, FunctionArg, FunctionArgExpr, Ident, Join, JoinConstraint,
-    JoinOperator, Offset, OnConflict, OnInsert, OrderByExpr, Select, SelectItem, SetExpr,
+    JoinOperator, Offset, OnConflict, OnConflictAction, OnInsert, OrderByExpr, Select, SelectItem,
+    SetExpr,
     Statement::{self, CreateIndex, CreateTable, Insert},
-    TableFactor, TableWithJoins, Value, WildcardAdditionalOptions,
+    TableFactor, TableWithJoins, Value, Values, WildcardAdditionalOptions,
 };
 
 use super::ast_views::{
@@ -131,18 +132,24 @@ pub trait SqlAstTraverser<Error = String> {
         Ok(())
     }
 
-    fn pre_visit_set_operation_left(&mut self, _body: &mut SetOperationViewMutable) -> VisitResult {
+    fn pre_visit_set_operation_left(
+        &mut self,
+        _set_operation: &mut SetOperationViewMutable,
+    ) -> VisitResult {
         Ok(())
     }
 
     fn pre_visit_set_operation_right(
         &mut self,
-        _body: &mut SetOperationViewMutable,
+        _set_operation: &mut SetOperationViewMutable,
     ) -> VisitResult {
         Ok(())
     }
 
-    fn post_visit_set_operation(&mut self, _body: &mut SetOperationViewMutable) -> VisitResult {
+    fn post_visit_set_operation(
+        &mut self,
+        _set_operation: &mut SetOperationViewMutable,
+    ) -> VisitResult {
         Ok(())
     }
 
@@ -691,18 +698,203 @@ pub trait SqlAstTraverser<Error = String> {
         self.post_visit_on_insert(on_insert)
     }
 
-    fn traverse_on_conflict(&mut self, on_conflict: &mut OnConflict) -> TraversalResult;
-    fn traverse_ast_query(&mut self, query: &mut Box<ast::Query>) -> TraversalResult;
-    fn traverse_offset(&mut self, offset: &mut Offset) -> TraversalResult;
-    fn traverse_order_by_expr(&mut self, expr: &mut OrderByExpr) -> TraversalResult;
-    fn traverse_set_expr(&mut self, body: &mut SetExpr) -> TraversalResult;
-    fn traverse_set_operation(&mut self, body: &mut SetOperationViewMutable) -> TraversalResult;
+    fn traverse_on_conflict(&mut self, on_conflict: &mut OnConflict) -> TraversalResult {
+        self.pre_visit_on_conflict(on_conflict)?;
+
+        let OnConflict {
+            action,
+            conflict_target: _,
+        } = on_conflict;
+
+        match action {
+            OnConflictAction::DoNothing => Ok(()),
+
+            OnConflictAction::DoUpdate(_) => {
+                Err("not implemented: OnConflictAction::DoUpdate".to_string())
+            }
+        }?;
+
+        self.post_visit_on_conflict(on_conflict)
+    }
+
+    fn traverse_ast_query(&mut self, query: &mut Box<ast::Query>) -> TraversalResult {
+        self.pre_visit_ast_query(query)?;
+
+        let ast::Query {
+            body,
+            fetch,
+            for_clause,
+            limit,
+            limit_by,
+            locks,
+            offset,
+            order_by,
+            with,
+        } = query.as_mut();
+
+        if fetch.is_some() {
+            return Err("not implemented: ast::Query::fetch".to_string());
+        }
+
+        if for_clause.is_some() {
+            return Err("not implemented: ast::Query::for_clause".to_string());
+        }
+
+        if !limit_by.is_empty() {
+            return Err("not implemented: ast::Query::limit_by".to_string());
+        }
+
+        if !locks.is_empty() {
+            return Err("not implemented: ast::Query::locks".to_string());
+        }
+
+        if with.is_some() {
+            return Err("not implemented: ast::Query::with".to_string());
+        }
+
+        self.traverse_set_expr(body)?;
+
+        order_by
+            .iter_mut()
+            .map(|expr| self.traverse_order_by_expr(expr))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        offset
+            .as_mut()
+            .map(|o| self.traverse_offset(o))
+            .transpose()?;
+
+        limit.as_mut().map(|l| self.traverse_expr(l)).transpose()?;
+
+        self.post_visit_ast_query(query)
+    }
+
+    fn traverse_offset(&mut self, offset: &mut Offset) -> TraversalResult {
+        self.pre_visit_offset(offset)?;
+
+        let Offset { value, rows: _ } = offset;
+        self.traverse_expr(value)?;
+
+        self.post_visit_offset(offset)
+    }
+
+    fn traverse_order_by_expr(&mut self, order_by_expr: &mut OrderByExpr) -> TraversalResult {
+        self.pre_visit_order_by_expr(order_by_expr)?;
+
+        let OrderByExpr {
+            expr,
+            asc: _,
+            nulls_first: _,
+        } = order_by_expr;
+        self.traverse_expr(expr)?;
+
+        self.post_visit_order_by_expr(order_by_expr)
+    }
+
+    fn traverse_set_expr(&mut self, set_expr: &mut SetExpr) -> TraversalResult {
+        self.pre_visit_set_expr(set_expr)?;
+
+        match set_expr {
+            SetExpr::Values(Values {
+                explicit_row: _,
+                rows,
+            }) => {
+                rows.into_iter()
+                    .map(|row| {
+                        row.into_iter()
+                            .map(|expr| self.traverse_expr(expr))
+                            .collect::<Result<Vec<_>, _>>()
+                            .map_err(|e| e.to_string())
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                Ok(())
+            }
+            SetExpr::Select(select) => self.traverse_select(select),
+            SetExpr::SetOperation { .. } => {
+                self.traverse_set_operation(&mut set_expr.try_into().unwrap())
+            }
+
+            SetExpr::Query(_) => Err("not implemented: SetExpr::Query".to_string()),
+            SetExpr::Insert(_) => Err("not implemented: SetExpr::Insert".to_string()),
+            SetExpr::Update(_) => Err("not implemented: SetExpr::Update".to_string()),
+            SetExpr::Table(_) => Err("not implemented: SetExpr::Table".to_string()),
+        }?;
+
+        self.post_visit_set_expr(set_expr)
+    }
+
+    fn traverse_set_operation(
+        &mut self,
+        set_operation: &mut SetOperationViewMutable,
+    ) -> TraversalResult {
+        self.pre_visit_set_operation_left(set_operation)?;
+
+        self.traverse_set_expr(set_operation.left)?;
+
+        self.pre_visit_set_operation_right(set_operation)?;
+
+        self.traverse_set_expr(set_operation.right)?;
+
+        self.post_visit_set_operation(set_operation)
+    }
+
     fn traverse_table_with_joins(
         &mut self,
         table_with_joins: &mut TableWithJoins,
-    ) -> TraversalResult;
-    fn traverse_join(&mut self, join: &mut Join) -> TraversalResult;
-    fn traverse_join_operator(&mut self, join_operator: &mut JoinOperator) -> TraversalResult;
+    ) -> TraversalResult {
+        self.pre_visit_table_with_joins(table_with_joins)?;
+
+        let TableWithJoins { relation, joins } = table_with_joins;
+
+        self.traverse_table_factor(relation)?;
+
+        joins
+            .iter_mut()
+            .map(|join| self.traverse_join(join))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        self.post_visit_table_with_joins(table_with_joins)
+    }
+
+    fn traverse_join(&mut self, join: &mut Join) -> TraversalResult {
+        self.pre_visit_join(join)?;
+
+        match join {
+            Join {
+                join_operator,
+                relation,
+            } => {
+                self.traverse_table_factor(relation)?;
+
+                self.traverse_join_operator(join_operator)
+            }
+        }?;
+
+        self.post_visit_join(join)
+    }
+
+    fn traverse_join_operator(&mut self, join_operator: &mut JoinOperator) -> TraversalResult {
+        self.pre_visit_join_operator(join_operator)?;
+
+        match join_operator {
+            JoinOperator::Inner(constraint) => self.traverse_join_constraint(constraint),
+            JoinOperator::LeftOuter(constraint) => self.traverse_join_constraint(constraint),
+            JoinOperator::RightOuter(constraint) => self.traverse_join_constraint(constraint),
+            JoinOperator::FullOuter(constraint) => self.traverse_join_constraint(constraint),
+            JoinOperator::LeftSemi(constraint) => self.traverse_join_constraint(constraint),
+            JoinOperator::RightSemi(constraint) => self.traverse_join_constraint(constraint),
+            JoinOperator::LeftAnti(constraint) => self.traverse_join_constraint(constraint),
+            JoinOperator::RightAnti(constraint) => self.traverse_join_constraint(constraint),
+
+            JoinOperator::CrossApply => Ok(()),
+            JoinOperator::CrossJoin => Ok(()),
+            JoinOperator::OuterApply => Ok(()),
+        }?;
+
+        self.post_visit_join_operator(join_operator)
+    }
+
     fn traverse_join_constraint(&mut self, constraint: &mut JoinConstraint) -> TraversalResult;
     fn traverse_table_factor(&mut self, relation: &mut TableFactor) -> TraversalResult;
     fn traverse_table_factor_derived(
