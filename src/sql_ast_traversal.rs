@@ -555,21 +555,6 @@ impl SqlAstTraverser for PathConvertor {
         Ok(())
     }
 
-    fn traverse_function_arg_expr(
-        &mut self,
-        function_arg_expr: &mut FunctionArgExpr,
-    ) -> TraversalResult {
-        self.pre_visit_function_arg_expr(function_arg_expr)?;
-
-        match function_arg_expr {
-            FunctionArgExpr::Expr(expr) => self.traverse_expr(expr),
-            FunctionArgExpr::Wildcard => Ok(()),
-            FunctionArgExpr::QualifiedWildcard(_) => Ok(()),
-        }?;
-
-        self.post_visit_function_arg_expr(function_arg_expr)
-    }
-
     fn traverse_value(&mut self, value: &mut Value) -> TraversalResult {
         self.pre_visit_value(value)?;
 

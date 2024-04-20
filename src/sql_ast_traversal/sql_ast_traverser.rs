@@ -1264,7 +1264,17 @@ pub trait SqlAstTraverser<Error = String> {
     fn traverse_function_arg_expr(
         &mut self,
         function_arg_expr: &mut FunctionArgExpr,
-    ) -> TraversalResult;
+    ) -> TraversalResult {
+        self.pre_visit_function_arg_expr(function_arg_expr)?;
+
+        match function_arg_expr {
+            FunctionArgExpr::Expr(expr) => self.traverse_expr(expr),
+            FunctionArgExpr::Wildcard => Ok(()),
+            FunctionArgExpr::QualifiedWildcard(_) => Ok(()),
+        }?;
+
+        self.post_visit_function_arg_expr(function_arg_expr)
+    }
 
     fn traverse_wildcard_additional_options(
         &mut self,
