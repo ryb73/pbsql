@@ -1220,7 +1220,7 @@ pub trait SqlAstTraverser<Error = String> {
             args,
             distinct: _,
             filter,
-            name,
+            name: _,
             null_treatment: _,
             order_by,
             over,
@@ -1309,29 +1309,8 @@ pub trait SqlAstTraverser<Error = String> {
     }
 
     fn traverse_value(&mut self, value: &mut Value) -> TraversalResult {
+        // TODO: pre and post not necessary
         self.pre_visit_value(value)?;
-
-        match value {
-            Value::Placeholder(s) => self.traverse_value_placeholder(s),
-            Value::SingleQuotedString(_)
-            | Value::Number(_, _)
-            | Value::Null
-            | Value::DollarQuotedString(_)
-            | Value::EscapedStringLiteral(_)
-            | Value::SingleQuotedByteStringLiteral(_)
-            | Value::DoubleQuotedByteStringLiteral(_)
-            | Value::RawStringLiteral(_)
-            | Value::NationalStringLiteral(_)
-            | Value::HexStringLiteral(_)
-            | Value::DoubleQuotedString(_)
-            | Value::Boolean(_)
-            | Value::UnQuotedString(_) => Ok(()),
-        }?;
-
         self.post_visit_value(value)
-    }
-
-    fn traverse_value_placeholder(&mut self, value: &mut String) -> TraversalResult {
-        self.visit_value_placeholder(value)
     }
 }

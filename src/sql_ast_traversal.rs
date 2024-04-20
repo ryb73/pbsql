@@ -4,16 +4,15 @@ mod sql_ast_traverser;
 use self::{
     ast_views::{
         CreateIndexStatementViewMutable, CreateTableStatementViewMutable, DropStatementViewMutable,
-        InSubqueryExprViewMutable, InsertStatementViewMutable, SetOperationViewMutable,
-        TableFactorDerivedViewMut, TableFactorTableViewMut, UpdateStatementViewMutable,
+        InsertStatementViewMutable, SetOperationViewMutable, TableFactorDerivedViewMut,
+        TableFactorTableViewMut, UpdateStatementViewMutable,
     },
-    sql_ast_traverser::{TraversalResult, VisitResult},
+    sql_ast_traverser::VisitResult,
 };
 use super::{VALUES_TABLE_INDEX_PREFIX, VALUES_TABLE_NAME};
 use sqlparser::ast::{
-    self, Assignment, Expr, Function, FunctionArg, FunctionArgExpr, GroupByExpr,
-    HiveDistributionStyle, HiveFormat, Ident, JoinConstraint, ObjectName, ObjectType, OnConflict,
-    Select, SelectItem, TableAlias, Value, WildcardAdditionalOptions,
+    self, Assignment, Function, FunctionArgExpr, HiveDistributionStyle, HiveFormat, Ident,
+    JoinConstraint, ObjectName, ObjectType, OnConflict, TableAlias, Value,
 };
 use std::collections::HashMap;
 use typed_path::Utf8UnixPathBuf;
@@ -453,13 +452,13 @@ impl SqlAstTraverser for PathConvertor {
 
     fn pre_visit_function(&mut self, func: &mut Function) -> VisitResult {
         let Function {
-            args,
+            args: _,
             distinct,
-            filter,
+            filter: _,
             name,
             null_treatment,
-            order_by,
-            over,
+            order_by: _,
+            over: _,
             // "special" apparently means the function's parentheses are omitted
             special: _,
         } = func;
@@ -473,14 +472,6 @@ impl SqlAstTraverser for PathConvertor {
         }
 
         validate_function_name(&name)
-    }
-
-    fn visit_value_placeholder(&mut self, value: &mut String) -> VisitResult {
-        if value == "?" {
-            Ok(())
-        } else {
-            Err(format!("Unhandled value: Value::Placeholder({})", value))
-        }
     }
 
     fn pre_visit_drop(&mut self, drop: &mut DropStatementViewMutable) -> VisitResult {
@@ -557,10 +548,15 @@ impl SqlAstTraverser for PathConvertor {
 
     fn pre_visit_value(&mut self, value: &mut Value) -> VisitResult {
         match value {
-            Value::Placeholder(_)
-            | Value::SingleQuotedString(_)
-            | Value::Number(_, _)
-            | Value::Null => Ok(()),
+            Value::Placeholder(value) => {
+                if value == "?" {
+                    Ok(())
+                } else {
+                    Err(format!("Unhandled value: Value::Placeholder({})", value))
+                }
+            }
+
+            Value::SingleQuotedString(_) | Value::Number(_, _) | Value::Null => Ok(()),
 
             Value::DollarQuotedString(_) => {
                 Err("Unhandled value: Value::DollarQuotedString".to_string())
