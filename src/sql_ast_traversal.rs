@@ -496,6 +496,14 @@ impl SqlAstTraverser for PathConvertor {
         Ok(())
     }
 
+    fn pre_visit_join_constraint(&mut self, constraint: &mut JoinConstraint) -> VisitResult {
+        if let JoinConstraint::Using(_) = constraint {
+            return Err("not implemented: JoinConstraint::Using".to_string());
+        }
+
+        Ok(())
+    }
+
     fn traverse_join_constraint(&mut self, constraint: &mut JoinConstraint) -> TraversalResult {
         self.pre_visit_join_constraint(constraint)?;
 
@@ -503,8 +511,7 @@ impl SqlAstTraverser for PathConvertor {
             JoinConstraint::On(expr) => self.traverse_expr(expr),
             JoinConstraint::Natural => Ok(()),
             JoinConstraint::None => Ok(()),
-
-            JoinConstraint::Using(_) => Err("not implemented: JoinConstraint::Using".to_string()),
+            JoinConstraint::Using(_) => Ok(()),
         }?;
 
         self.post_visit_join_constraint(constraint)
