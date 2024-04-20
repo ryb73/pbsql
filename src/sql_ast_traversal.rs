@@ -360,6 +360,26 @@ impl SqlAstTraverser for PathConvertor {
         Ok(())
     }
 
+    fn pre_visit_table_factor_table(
+        &mut self,
+        relation: &mut TableFactorTableViewMut,
+    ) -> VisitResult {
+        let TableFactorTableViewMut {
+            alias: _,
+            args: _,
+            name: _,
+            partitions,
+            version: _,
+            with_hints: _,
+        } = relation;
+
+        if !partitions.is_empty() {
+            return Err("not implemented: TableFactor::Table::partitions".to_string());
+        }
+
+        Ok(())
+    }
+
     fn post_visit_table_factor_table(
         &mut self,
         relation: &mut TableFactorTableViewMut,
@@ -514,17 +534,13 @@ impl SqlAstTraverser for PathConvertor {
             alias: _,
             args,
             name: _,
-            partitions,
+            partitions: _,
             version,
             with_hints,
         } = relation;
 
         if args.is_some() {
             return Err("not implemented: TableFactor::Table::args".to_string());
-        }
-
-        if !partitions.is_empty() {
-            return Err("not implemented: TableFactor::Table::partitions".to_string());
         }
 
         if version.is_some() {
