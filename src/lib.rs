@@ -874,6 +874,14 @@ mod tests {
     }
 
     #[test]
+    fn unsupported_function() {
+        let sql = "SELECT badfunc()";
+
+        let msg = translate_sql(sql).unwrap_err();
+        assert_eq!(msg, "Unsupported function: badfunc")
+    }
+
+    #[test]
     fn another_select() {
         let sql = r#"
             SELECT

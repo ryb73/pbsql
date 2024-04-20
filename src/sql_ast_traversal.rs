@@ -452,7 +452,27 @@ impl SqlAstTraverser for PathConvertor {
     }
 
     fn pre_visit_function(&mut self, func: &mut Function) -> VisitResult {
-        validate_function_name(&func.name)
+        let Function {
+            args,
+            distinct,
+            filter,
+            name,
+            null_treatment,
+            order_by,
+            over,
+            // "special" apparently means the function's parentheses are omitted
+            special: _,
+        } = func;
+
+        if *distinct {
+            return Err("Unhandled syntax: Function::distinct".to_string());
+        }
+
+        if null_treatment.is_some() {
+            return Err("Unhandled syntax: Function::null_treatment".to_string());
+        }
+
+        validate_function_name(&name)
     }
 
     fn visit_value_placeholder(&mut self, value: &mut String) -> VisitResult {
@@ -529,26 +549,18 @@ impl SqlAstTraverser for PathConvertor {
 
         let Function {
             args,
-            distinct,
+            distinct: _,
             filter,
             name,
-            null_treatment,
+            null_treatment: _,
             order_by,
             over,
             // "special" apparently means the function's parentheses are omitted
             special: _,
         } = func;
 
-        if *distinct {
-            return Err("Unhandled syntax: Function::distinct".to_string());
-        }
-
         if filter.is_some() {
             return Err("Unhandled syntax: Function::filter".to_string());
-        }
-
-        if null_treatment.is_some() {
-            return Err("Unhandled syntax: Function::null_treatment".to_string());
         }
 
         if !order_by.is_empty() {
@@ -558,8 +570,6 @@ impl SqlAstTraverser for PathConvertor {
         if over.is_some() {
             return Err("Unhandled syntax: Function::over".to_string());
         }
-
-        validate_function_name(name)?;
 
         args.iter_mut()
             .map(|arg| self.traverse_function_arg(arg))
