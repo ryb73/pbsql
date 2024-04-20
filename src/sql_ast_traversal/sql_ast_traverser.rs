@@ -895,8 +895,50 @@ pub trait SqlAstTraverser<Error = String> {
         self.post_visit_join_operator(join_operator)
     }
 
-    fn traverse_join_constraint(&mut self, constraint: &mut JoinConstraint) -> TraversalResult;
-    fn traverse_table_factor(&mut self, relation: &mut TableFactor) -> TraversalResult;
+    fn traverse_join_constraint(&mut self, constraint: &mut JoinConstraint) -> TraversalResult {
+        self.pre_visit_join_constraint(constraint)?;
+
+        match constraint {
+            JoinConstraint::On(expr) => self.traverse_expr(expr),
+            JoinConstraint::Natural => Ok(()),
+            JoinConstraint::None => Ok(()),
+            JoinConstraint::Using(_) => Ok(()),
+        }?;
+
+        self.post_visit_join_constraint(constraint)
+    }
+
+    fn traverse_table_factor(&mut self, relation: &mut TableFactor) -> TraversalResult {
+        self.pre_visit_table_factor(relation)?;
+
+        match relation {
+            TableFactor::Table { .. } => {
+                self.traverse_table_factor_table(&mut relation.try_into().unwrap())
+            }
+            TableFactor::Derived { .. } => {
+                self.traverse_table_factor_derived(&mut relation.try_into().unwrap())
+            }
+
+            TableFactor::TableFunction { .. } => {
+                Err("not implemented: TableFactor::TableFunction".to_string())
+            }
+            TableFactor::Function { .. } => {
+                Err("not implemented: TableFactor::Function".to_string())
+            }
+            TableFactor::UNNEST { .. } => Err("not implemented: TableFactor::UNNEST".to_string()),
+            TableFactor::JsonTable { .. } => {
+                Err("not implemented: TableFactor::JsonTable".to_string())
+            }
+            TableFactor::NestedJoin { .. } => {
+                Err("not implemented: TableFactor::NestedJoin".to_string())
+            }
+            TableFactor::Pivot { .. } => Err("not implemented: TableFactor::Pivot".to_string()),
+            TableFactor::Unpivot { .. } => Err("not implemented: TableFactor::Unpivot".to_string()),
+        }?;
+
+        self.post_visit_table_factor(relation)
+    }
+
     fn traverse_table_factor_derived(
         &mut self,
         relation: &mut TableFactorDerivedViewMut,
