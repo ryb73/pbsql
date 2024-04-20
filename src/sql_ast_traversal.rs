@@ -592,33 +592,6 @@ impl SqlAstTraverser for PathConvertor {
 
         Ok(())
     }
-
-    fn traverse_value(&mut self, value: &mut Value) -> TraversalResult {
-        self.pre_visit_value(value)?;
-
-        match value {
-            Value::Placeholder(s) => self.traverse_value_placeholder(s),
-            Value::SingleQuotedString(_)
-            | Value::Number(_, _)
-            | Value::Null
-            | Value::DollarQuotedString(_)
-            | Value::EscapedStringLiteral(_)
-            | Value::SingleQuotedByteStringLiteral(_)
-            | Value::DoubleQuotedByteStringLiteral(_)
-            | Value::RawStringLiteral(_)
-            | Value::NationalStringLiteral(_)
-            | Value::HexStringLiteral(_)
-            | Value::DoubleQuotedString(_)
-            | Value::Boolean(_)
-            | Value::UnQuotedString(_) => Ok(()),
-        }?;
-
-        self.post_visit_value(value)
-    }
-
-    fn traverse_value_placeholder(&mut self, value: &mut String) -> TraversalResult {
-        self.visit_value_placeholder(value)
-    }
 }
 
 fn validate_function_name(name: &ObjectName) -> Result<(), String> {

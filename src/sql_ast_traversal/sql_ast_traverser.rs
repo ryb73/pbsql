@@ -1308,6 +1308,30 @@ pub trait SqlAstTraverser<Error = String> {
         self.post_visit_wildcard_additional_options(wildcard_additional_options)
     }
 
-    fn traverse_value(&mut self, value: &mut Value) -> TraversalResult;
-    fn traverse_value_placeholder(&mut self, value: &mut String) -> TraversalResult;
+    fn traverse_value(&mut self, value: &mut Value) -> TraversalResult {
+        self.pre_visit_value(value)?;
+
+        match value {
+            Value::Placeholder(s) => self.traverse_value_placeholder(s),
+            Value::SingleQuotedString(_)
+            | Value::Number(_, _)
+            | Value::Null
+            | Value::DollarQuotedString(_)
+            | Value::EscapedStringLiteral(_)
+            | Value::SingleQuotedByteStringLiteral(_)
+            | Value::DoubleQuotedByteStringLiteral(_)
+            | Value::RawStringLiteral(_)
+            | Value::NationalStringLiteral(_)
+            | Value::HexStringLiteral(_)
+            | Value::DoubleQuotedString(_)
+            | Value::Boolean(_)
+            | Value::UnQuotedString(_) => Ok(()),
+        }?;
+
+        self.post_visit_value(value)
+    }
+
+    fn traverse_value_placeholder(&mut self, value: &mut String) -> TraversalResult {
+        self.visit_value_placeholder(value)
+    }
 }
