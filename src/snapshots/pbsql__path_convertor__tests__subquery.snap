@@ -1,0 +1,136 @@
+---
+source: src/path_convertor.rs
+expression: translate_result
+---
+Ok:
+  - ~/books/eloScores: db1
+    ~/books/matches: main
+  - - SELECT
+    - "  loserId,"
+    - "  winnerId"
+    - FROM
+    - "  main.table_contents"
+    - WHERE
+    - "  loserId IN ("
+    - "    SELECT"
+    - "      thingId"
+    - "    FROM"
+    - "      db1.table_contents"
+    - "    ORDER BY"
+    - "      score DESC,"
+    - "      thingId DESC"
+    - "    LIMIT"
+    - "      15"
+    - "  )"
+  - - Query:
+        with: ~
+        body:
+          Select:
+            distinct: ~
+            top: ~
+            projection:
+              - UnnamedExpr:
+                  Identifier:
+                    value: loserId
+                    quote_style: ~
+              - UnnamedExpr:
+                  Identifier:
+                    value: winnerId
+                    quote_style: ~
+            into: ~
+            from:
+              - relation:
+                  Table:
+                    name:
+                      - value: main
+                        quote_style: ~
+                      - value: table_contents
+                        quote_style: ~
+                    alias: ~
+                    args: ~
+                    with_hints: []
+                    version: ~
+                    partitions: []
+                joins: []
+            lateral_views: []
+            selection:
+              InSubquery:
+                expr:
+                  Identifier:
+                    value: loserId
+                    quote_style: ~
+                subquery:
+                  with: ~
+                  body:
+                    Select:
+                      distinct: ~
+                      top: ~
+                      projection:
+                        - UnnamedExpr:
+                            Identifier:
+                              value: thingId
+                              quote_style: ~
+                      into: ~
+                      from:
+                        - relation:
+                            Table:
+                              name:
+                                - value: db1
+                                  quote_style: ~
+                                - value: table_contents
+                                  quote_style: ~
+                              alias: ~
+                              args: ~
+                              with_hints: []
+                              version: ~
+                              partitions: []
+                          joins: []
+                      lateral_views: []
+                      selection: ~
+                      group_by:
+                        Expressions: []
+                      cluster_by: []
+                      distribute_by: []
+                      sort_by: []
+                      having: ~
+                      named_window: []
+                      qualify: ~
+                  order_by:
+                    - expr:
+                        Identifier:
+                          value: score
+                          quote_style: ~
+                      asc: false
+                      nulls_first: ~
+                    - expr:
+                        Identifier:
+                          value: thingId
+                          quote_style: ~
+                      asc: false
+                      nulls_first: ~
+                  limit:
+                    Value:
+                      Number:
+                        - "15"
+                        - false
+                  limit_by: []
+                  offset: ~
+                  fetch: ~
+                  locks: []
+                  for_clause: ~
+                negated: false
+            group_by:
+              Expressions: []
+            cluster_by: []
+            distribute_by: []
+            sort_by: []
+            having: ~
+            named_window: []
+            qualify: ~
+        order_by: []
+        limit: ~
+        limit_by: []
+        offset: ~
+        fetch: ~
+        locks: []
+        for_clause: ~

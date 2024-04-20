@@ -1,0 +1,65 @@
+---
+source: src/path_convertor.rs
+expression: translate_result
+---
+Ok:
+  - ~/my-data-scraper/reelgood/shows-and-movies: main
+  - - INSERT INTO
+    - "  main.table_contents (\"format\", \"isWatched\", \"name\", \"url\", \"imageUrl\")"
+    - VALUES
+    - "  (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING"
+  - - Insert:
+        or: ~
+        ignore: false
+        into: true
+        table_name:
+          - value: main
+            quote_style: ~
+          - value: table_contents
+            quote_style: ~
+        table_alias: ~
+        columns:
+          - value: format
+            quote_style: "\""
+          - value: isWatched
+            quote_style: "\""
+          - value: name
+            quote_style: "\""
+          - value: url
+            quote_style: "\""
+          - value: imageUrl
+            quote_style: "\""
+        overwrite: false
+        source:
+          with: ~
+          body:
+            Values:
+              explicit_row: false
+              rows:
+                - - Value:
+                      Placeholder: "?"
+                  - Value:
+                      Placeholder: "?"
+                  - Value:
+                      Placeholder: "?"
+                  - Value:
+                      Placeholder: "?"
+                  - Value:
+                      Placeholder: "?"
+          order_by: []
+          limit: ~
+          limit_by: []
+          offset: ~
+          fetch: ~
+          locks: []
+          for_clause: ~
+        partitioned: ~
+        after_columns: []
+        table: false
+        "on":
+          OnConflict:
+            conflict_target: ~
+            action: DoNothing
+        returning: ~
+        replace_into: false
+        priority: ~

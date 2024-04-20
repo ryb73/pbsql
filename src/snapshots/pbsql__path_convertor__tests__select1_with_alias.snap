@@ -1,0 +1,120 @@
+---
+source: src/path_convertor.rs
+expression: translate_result
+---
+Ok:
+  - ~/books/things: main
+  - - SELECT
+    - "  \"things\".id,"
+    - "  \"things\".title,"
+    - "  \"things\".subtitle,"
+    - "  \"things\".image_url,"
+    - "  \"things\".external_link,"
+    - "  \"things\".external_link_title,"
+    - "  \"things\".excluded"
+    - FROM
+    - "  main.table_contents AS \"things\""
+    - WHERE
+    - "  \"things\".id = ?"
+    - LIMIT
+    - "  1"
+  - - Query:
+        with: ~
+        body:
+          Select:
+            distinct: ~
+            top: ~
+            projection:
+              - UnnamedExpr:
+                  CompoundIdentifier:
+                    - value: things
+                      quote_style: "\""
+                    - value: id
+                      quote_style: ~
+              - UnnamedExpr:
+                  CompoundIdentifier:
+                    - value: things
+                      quote_style: "\""
+                    - value: title
+                      quote_style: ~
+              - UnnamedExpr:
+                  CompoundIdentifier:
+                    - value: things
+                      quote_style: "\""
+                    - value: subtitle
+                      quote_style: ~
+              - UnnamedExpr:
+                  CompoundIdentifier:
+                    - value: things
+                      quote_style: "\""
+                    - value: image_url
+                      quote_style: ~
+              - UnnamedExpr:
+                  CompoundIdentifier:
+                    - value: things
+                      quote_style: "\""
+                    - value: external_link
+                      quote_style: ~
+              - UnnamedExpr:
+                  CompoundIdentifier:
+                    - value: things
+                      quote_style: "\""
+                    - value: external_link_title
+                      quote_style: ~
+              - UnnamedExpr:
+                  CompoundIdentifier:
+                    - value: things
+                      quote_style: "\""
+                    - value: excluded
+                      quote_style: ~
+            into: ~
+            from:
+              - relation:
+                  Table:
+                    name:
+                      - value: main
+                        quote_style: ~
+                      - value: table_contents
+                        quote_style: ~
+                    alias:
+                      name:
+                        value: things
+                        quote_style: "\""
+                      columns: []
+                    args: ~
+                    with_hints: []
+                    version: ~
+                    partitions: []
+                joins: []
+            lateral_views: []
+            selection:
+              BinaryOp:
+                left:
+                  CompoundIdentifier:
+                    - value: things
+                      quote_style: "\""
+                    - value: id
+                      quote_style: ~
+                op: Eq
+                right:
+                  Value:
+                    Placeholder: "?"
+            group_by:
+              Expressions: []
+            cluster_by: []
+            distribute_by: []
+            sort_by: []
+            having: ~
+            named_window: []
+            qualify: ~
+        order_by: []
+        limit:
+          Value:
+            Number:
+              - "1"
+              - false
+        limit_by: []
+        offset: ~
+        fetch: ~
+        locks: []
+        for_clause: ~

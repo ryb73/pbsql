@@ -1,0 +1,5 @@
+---
+source: src/path_convertor.rs
+expression: translate_result
+---
+Err: "Expected 1 identifiers for the table name, got: [\"x\", \"y\"]"

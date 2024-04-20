@@ -1,0 +1,120 @@
+---
+source: src/path_convertor.rs
+expression: translate_result
+---
+Ok:
+  - ~/books/things: main
+  - - CREATE TABLE IF NOT EXISTS main.table_contents (
+    - "  \"excluded\" BOOLEAN NOT NULL DEFAULT false,"
+    - "  \"externalLink\" TEXT NOT NULL,"
+    - "  \"externalLinkTitle\" TEXT NOT NULL,"
+    - "  \"id\" TEXT PRIMARY KEY NOT NULL,"
+    - "  \"imageUrl\" TEXT NOT NULL,"
+    - "  \"subtitle\" TEXT NULL,"
+    - "  \"title\" TEXT NOT NULL"
+    - )
+  - - CreateTable:
+        or_replace: false
+        temporary: false
+        external: false
+        global: ~
+        if_not_exists: true
+        transient: false
+        name:
+          - value: main
+            quote_style: ~
+          - value: table_contents
+            quote_style: ~
+        columns:
+          - name:
+              value: excluded
+              quote_style: "\""
+            data_type: Boolean
+            collation: ~
+            options:
+              - name: ~
+                option: NotNull
+              - name: ~
+                option:
+                  Default:
+                    Value:
+                      Boolean: false
+          - name:
+              value: externalLink
+              quote_style: "\""
+            data_type: Text
+            collation: ~
+            options:
+              - name: ~
+                option: NotNull
+          - name:
+              value: externalLinkTitle
+              quote_style: "\""
+            data_type: Text
+            collation: ~
+            options:
+              - name: ~
+                option: NotNull
+          - name:
+              value: id
+              quote_style: "\""
+            data_type: Text
+            collation: ~
+            options:
+              - name: ~
+                option:
+                  Unique:
+                    is_primary: true
+                    characteristics: ~
+              - name: ~
+                option: NotNull
+          - name:
+              value: imageUrl
+              quote_style: "\""
+            data_type: Text
+            collation: ~
+            options:
+              - name: ~
+                option: NotNull
+          - name:
+              value: subtitle
+              quote_style: "\""
+            data_type: Text
+            collation: ~
+            options:
+              - name: ~
+                option: "Null"
+          - name:
+              value: title
+              quote_style: "\""
+            data_type: Text
+            collation: ~
+            options:
+              - name: ~
+                option: NotNull
+        constraints: []
+        hive_distribution: NONE
+        hive_formats:
+          row_format: ~
+          storage: ~
+          location: ~
+        table_properties: []
+        with_options: []
+        file_format: ~
+        location: ~
+        query: ~
+        without_rowid: false
+        like: ~
+        clone: ~
+        engine: ~
+        comment: ~
+        auto_increment_offset: ~
+        default_charset: ~
+        collation: ~
+        on_commit: ~
+        on_cluster: ~
+        order_by: ~
+        partition_by: ~
+        cluster_by: ~
+        options: ~
+        strict: false

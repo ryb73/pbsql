@@ -1,0 +1,80 @@
+---
+source: src/path_convertor.rs
+expression: translate_result
+---
+Ok:
+  - ~/books/matches: main
+  - - INSERT INTO
+    - "  main.table_contents (\"id\", \"loserId\", \"winnerId\", \"matchDate\")"
+    - VALUES
+    - "  (?, ?, DATETIME('now'), CURRENT_TIMESTAMP)"
+  - - Insert:
+        or: ~
+        ignore: false
+        into: true
+        table_name:
+          - value: main
+            quote_style: ~
+          - value: table_contents
+            quote_style: ~
+        table_alias: ~
+        columns:
+          - value: id
+            quote_style: "\""
+          - value: loserId
+            quote_style: "\""
+          - value: winnerId
+            quote_style: "\""
+          - value: matchDate
+            quote_style: "\""
+        overwrite: false
+        source:
+          with: ~
+          body:
+            Values:
+              explicit_row: false
+              rows:
+                - - Value:
+                      Placeholder: "?"
+                  - Value:
+                      Placeholder: "?"
+                  - Function:
+                      name:
+                        - value: DATETIME
+                          quote_style: ~
+                      args:
+                        - Unnamed:
+                            Expr:
+                              Value:
+                                SingleQuotedString: now
+                      filter: ~
+                      null_treatment: ~
+                      over: ~
+                      distinct: false
+                      special: false
+                      order_by: []
+                  - Function:
+                      name:
+                        - value: CURRENT_TIMESTAMP
+                          quote_style: ~
+                      args: []
+                      filter: ~
+                      null_treatment: ~
+                      over: ~
+                      distinct: false
+                      special: true
+                      order_by: []
+          order_by: []
+          limit: ~
+          limit_by: []
+          offset: ~
+          fetch: ~
+          locks: []
+          for_clause: ~
+        partitioned: ~
+        after_columns: []
+        table: false
+        "on": ~
+        returning: ~
+        replace_into: false
+        priority: ~

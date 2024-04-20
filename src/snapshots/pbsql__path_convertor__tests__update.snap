@@ -1,0 +1,46 @@
+---
+source: src/path_convertor.rs
+expression: translate_result
+---
+Ok:
+  - ~/books/eloScores: main
+  - - UPDATE
+    - "  main.table_contents"
+    - SET
+    - "  \"score\" = ?"
+    - WHERE
+    - "  \"thingId\" = ?"
+  - - Update:
+        table:
+          relation:
+            Table:
+              name:
+                - value: main
+                  quote_style: ~
+                - value: table_contents
+                  quote_style: ~
+              alias: ~
+              args: ~
+              with_hints: []
+              version: ~
+              partitions: []
+          joins: []
+        assignments:
+          - id:
+              - value: score
+                quote_style: "\""
+            value:
+              Value:
+                Placeholder: "?"
+        from: ~
+        selection:
+          BinaryOp:
+            left:
+              Identifier:
+                value: thingId
+                quote_style: "\""
+            op: Eq
+            right:
+              Value:
+                Placeholder: "?"
+        returning: ~

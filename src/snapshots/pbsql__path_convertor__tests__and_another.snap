@@ -1,0 +1,332 @@
+---
+source: src/path_convertor.rs
+expression: translate_result
+---
+Ok:
+  - ~/books/matches: db1
+    ~/books/things: main
+  - - SELECT
+    - "  \"id\""
+    - FROM
+    - "  ("
+    - "    SELECT"
+    - "      main.table_contents.id AS \"id\","
+    - "      0 AS \"num_matches\""
+    - "    FROM"
+    - "      main.table_contents"
+    - "      LEFT JOIN db1.table_contents ON ("
+    - "        db1.table_contents.winner_id = main.table_contents.id"
+    - "        OR db1.table_contents.loser_id = main.table_contents.id"
+    - "      )"
+    - "    WHERE"
+    - "      db1.table_contents.loser_id IS NULL"
+    - "    UNION"
+    - "    ALL"
+    - "    SELECT"
+    - "      \"winner_id\" AS \"id\","
+    - "      1 AS \"num_matches\""
+    - "    FROM"
+    - "      db1.table_contents"
+    - "    UNION"
+    - "    ALL"
+    - "    SELECT"
+    - "      \"loser_id\" AS \"id\","
+    - "      1 AS \"num_matches\""
+    - "    FROM"
+    - "      db1.table_contents"
+    - "  ) AS \"sq\""
+    - GROUP BY
+    - "  \"id\""
+    - ORDER BY
+    - "  sum(\"num_matches\")"
+    - LIMIT
+    - "  ?"
+  - - Query:
+        with: ~
+        body:
+          Select:
+            distinct: ~
+            top: ~
+            projection:
+              - UnnamedExpr:
+                  Identifier:
+                    value: id
+                    quote_style: "\""
+            into: ~
+            from:
+              - relation:
+                  Derived:
+                    lateral: false
+                    subquery:
+                      with: ~
+                      body:
+                        SetOperation:
+                          op: Union
+                          set_quantifier: All
+                          left:
+                            SetOperation:
+                              op: Union
+                              set_quantifier: All
+                              left:
+                                Select:
+                                  distinct: ~
+                                  top: ~
+                                  projection:
+                                    - ExprWithAlias:
+                                        expr:
+                                          CompoundIdentifier:
+                                            - value: main
+                                              quote_style: ~
+                                            - value: table_contents
+                                              quote_style: ~
+                                            - value: id
+                                              quote_style: ~
+                                        alias:
+                                          value: id
+                                          quote_style: "\""
+                                    - ExprWithAlias:
+                                        expr:
+                                          Value:
+                                            Number:
+                                              - "0"
+                                              - false
+                                        alias:
+                                          value: num_matches
+                                          quote_style: "\""
+                                  into: ~
+                                  from:
+                                    - relation:
+                                        Table:
+                                          name:
+                                            - value: main
+                                              quote_style: ~
+                                            - value: table_contents
+                                              quote_style: ~
+                                          alias: ~
+                                          args: ~
+                                          with_hints: []
+                                          version: ~
+                                          partitions: []
+                                      joins:
+                                        - relation:
+                                            Table:
+                                              name:
+                                                - value: db1
+                                                  quote_style: ~
+                                                - value: table_contents
+                                                  quote_style: ~
+                                              alias: ~
+                                              args: ~
+                                              with_hints: []
+                                              version: ~
+                                              partitions: []
+                                          join_operator:
+                                            LeftOuter:
+                                              "On":
+                                                Nested:
+                                                  BinaryOp:
+                                                    left:
+                                                      BinaryOp:
+                                                        left:
+                                                          CompoundIdentifier:
+                                                            - value: db1
+                                                              quote_style: ~
+                                                            - value: table_contents
+                                                              quote_style: ~
+                                                            - value: winner_id
+                                                              quote_style: ~
+                                                        op: Eq
+                                                        right:
+                                                          CompoundIdentifier:
+                                                            - value: main
+                                                              quote_style: ~
+                                                            - value: table_contents
+                                                              quote_style: ~
+                                                            - value: id
+                                                              quote_style: ~
+                                                    op: Or
+                                                    right:
+                                                      BinaryOp:
+                                                        left:
+                                                          CompoundIdentifier:
+                                                            - value: db1
+                                                              quote_style: ~
+                                                            - value: table_contents
+                                                              quote_style: ~
+                                                            - value: loser_id
+                                                              quote_style: ~
+                                                        op: Eq
+                                                        right:
+                                                          CompoundIdentifier:
+                                                            - value: main
+                                                              quote_style: ~
+                                                            - value: table_contents
+                                                              quote_style: ~
+                                                            - value: id
+                                                              quote_style: ~
+                                  lateral_views: []
+                                  selection:
+                                    IsNull:
+                                      CompoundIdentifier:
+                                        - value: db1
+                                          quote_style: ~
+                                        - value: table_contents
+                                          quote_style: ~
+                                        - value: loser_id
+                                          quote_style: ~
+                                  group_by:
+                                    Expressions: []
+                                  cluster_by: []
+                                  distribute_by: []
+                                  sort_by: []
+                                  having: ~
+                                  named_window: []
+                                  qualify: ~
+                              right:
+                                Select:
+                                  distinct: ~
+                                  top: ~
+                                  projection:
+                                    - ExprWithAlias:
+                                        expr:
+                                          Identifier:
+                                            value: winner_id
+                                            quote_style: "\""
+                                        alias:
+                                          value: id
+                                          quote_style: "\""
+                                    - ExprWithAlias:
+                                        expr:
+                                          Value:
+                                            Number:
+                                              - "1"
+                                              - false
+                                        alias:
+                                          value: num_matches
+                                          quote_style: "\""
+                                  into: ~
+                                  from:
+                                    - relation:
+                                        Table:
+                                          name:
+                                            - value: db1
+                                              quote_style: ~
+                                            - value: table_contents
+                                              quote_style: ~
+                                          alias: ~
+                                          args: ~
+                                          with_hints: []
+                                          version: ~
+                                          partitions: []
+                                      joins: []
+                                  lateral_views: []
+                                  selection: ~
+                                  group_by:
+                                    Expressions: []
+                                  cluster_by: []
+                                  distribute_by: []
+                                  sort_by: []
+                                  having: ~
+                                  named_window: []
+                                  qualify: ~
+                          right:
+                            Select:
+                              distinct: ~
+                              top: ~
+                              projection:
+                                - ExprWithAlias:
+                                    expr:
+                                      Identifier:
+                                        value: loser_id
+                                        quote_style: "\""
+                                    alias:
+                                      value: id
+                                      quote_style: "\""
+                                - ExprWithAlias:
+                                    expr:
+                                      Value:
+                                        Number:
+                                          - "1"
+                                          - false
+                                    alias:
+                                      value: num_matches
+                                      quote_style: "\""
+                              into: ~
+                              from:
+                                - relation:
+                                    Table:
+                                      name:
+                                        - value: db1
+                                          quote_style: ~
+                                        - value: table_contents
+                                          quote_style: ~
+                                      alias: ~
+                                      args: ~
+                                      with_hints: []
+                                      version: ~
+                                      partitions: []
+                                  joins: []
+                              lateral_views: []
+                              selection: ~
+                              group_by:
+                                Expressions: []
+                              cluster_by: []
+                              distribute_by: []
+                              sort_by: []
+                              having: ~
+                              named_window: []
+                              qualify: ~
+                      order_by: []
+                      limit: ~
+                      limit_by: []
+                      offset: ~
+                      fetch: ~
+                      locks: []
+                      for_clause: ~
+                    alias:
+                      name:
+                        value: sq
+                        quote_style: "\""
+                      columns: []
+                joins: []
+            lateral_views: []
+            selection: ~
+            group_by:
+              Expressions:
+                - Identifier:
+                    value: id
+                    quote_style: "\""
+            cluster_by: []
+            distribute_by: []
+            sort_by: []
+            having: ~
+            named_window: []
+            qualify: ~
+        order_by:
+          - expr:
+              Function:
+                name:
+                  - value: sum
+                    quote_style: ~
+                args:
+                  - Unnamed:
+                      Expr:
+                        Identifier:
+                          value: num_matches
+                          quote_style: "\""
+                filter: ~
+                null_treatment: ~
+                over: ~
+                distinct: false
+                special: false
+                order_by: []
+            asc: ~
+            nulls_first: ~
+        limit:
+          Value:
+            Placeholder: "?"
+        limit_by: []
+        offset: ~
+        fetch: ~
+        locks: []
+        for_clause: ~

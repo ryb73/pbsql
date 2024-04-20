@@ -1,0 +1,54 @@
+---
+source: src/path_convertor.rs
+expression: translate_result
+---
+Ok:
+  - ~/heyy: main
+  - - SELECT
+    - "  *"
+    - FROM
+    - "  main.table_contents"
+  - - Query:
+        with: ~
+        body:
+          Select:
+            distinct: ~
+            top: ~
+            projection:
+              - Wildcard:
+                  opt_exclude: ~
+                  opt_except: ~
+                  opt_rename: ~
+                  opt_replace: ~
+            into: ~
+            from:
+              - relation:
+                  Table:
+                    name:
+                      - value: main
+                        quote_style: ~
+                      - value: table_contents
+                        quote_style: ~
+                    alias: ~
+                    args: ~
+                    with_hints: []
+                    version: ~
+                    partitions: []
+                joins: []
+            lateral_views: []
+            selection: ~
+            group_by:
+              Expressions: []
+            cluster_by: []
+            distribute_by: []
+            sort_by: []
+            having: ~
+            named_window: []
+            qualify: ~
+        order_by: []
+        limit: ~
+        limit_by: []
+        offset: ~
+        fetch: ~
+        locks: []
+        for_clause: ~

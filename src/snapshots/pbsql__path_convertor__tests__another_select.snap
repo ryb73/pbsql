@@ -1,0 +1,220 @@
+---
+source: src/path_convertor.rs
+expression: translate_result
+---
+Ok:
+  - ~/books/eloScores: main
+    ~/books/things: db1
+  - - SELECT
+    - "  COUNT(*) AS \"rank0\""
+    - FROM
+    - "  main.table_contents AS \"eloScores\""
+    - "  JOIN main.table_contents AS \"comparisonScore\" ON \"eloScores\".thingId = ?"
+    - "  JOIN db1.table_contents AS \"books\" ON \"books\".id = \"eloScores\".thingId"
+    - WHERE
+    - "  \"books\".excluded = ?"
+    - "  AND ("
+    - "    \"eloScores\".score > \"comparisonScore\".score"
+    - "    OR ("
+    - "      \"eloScores\".score = \"comparisonScore\".score"
+    - "      AND \"eloScores\".thingId > \"comparisonScore\".thingId"
+    - "    )"
+    - "  )"
+    - LIMIT
+    - "  ? OFFSET ?"
+  - - Query:
+        with: ~
+        body:
+          Select:
+            distinct: ~
+            top: ~
+            projection:
+              - ExprWithAlias:
+                  expr:
+                    Function:
+                      name:
+                        - value: COUNT
+                          quote_style: ~
+                      args:
+                        - Unnamed: Wildcard
+                      filter: ~
+                      null_treatment: ~
+                      over: ~
+                      distinct: false
+                      special: false
+                      order_by: []
+                  alias:
+                    value: rank0
+                    quote_style: "\""
+            into: ~
+            from:
+              - relation:
+                  Table:
+                    name:
+                      - value: main
+                        quote_style: ~
+                      - value: table_contents
+                        quote_style: ~
+                    alias:
+                      name:
+                        value: eloScores
+                        quote_style: "\""
+                      columns: []
+                    args: ~
+                    with_hints: []
+                    version: ~
+                    partitions: []
+                joins:
+                  - relation:
+                      Table:
+                        name:
+                          - value: main
+                            quote_style: ~
+                          - value: table_contents
+                            quote_style: ~
+                        alias:
+                          name:
+                            value: comparisonScore
+                            quote_style: "\""
+                          columns: []
+                        args: ~
+                        with_hints: []
+                        version: ~
+                        partitions: []
+                    join_operator:
+                      Inner:
+                        "On":
+                          BinaryOp:
+                            left:
+                              CompoundIdentifier:
+                                - value: eloScores
+                                  quote_style: "\""
+                                - value: thingId
+                                  quote_style: ~
+                            op: Eq
+                            right:
+                              Value:
+                                Placeholder: "?"
+                  - relation:
+                      Table:
+                        name:
+                          - value: db1
+                            quote_style: ~
+                          - value: table_contents
+                            quote_style: ~
+                        alias:
+                          name:
+                            value: books
+                            quote_style: "\""
+                          columns: []
+                        args: ~
+                        with_hints: []
+                        version: ~
+                        partitions: []
+                    join_operator:
+                      Inner:
+                        "On":
+                          BinaryOp:
+                            left:
+                              CompoundIdentifier:
+                                - value: books
+                                  quote_style: "\""
+                                - value: id
+                                  quote_style: ~
+                            op: Eq
+                            right:
+                              CompoundIdentifier:
+                                - value: eloScores
+                                  quote_style: "\""
+                                - value: thingId
+                                  quote_style: ~
+            lateral_views: []
+            selection:
+              BinaryOp:
+                left:
+                  BinaryOp:
+                    left:
+                      CompoundIdentifier:
+                        - value: books
+                          quote_style: "\""
+                        - value: excluded
+                          quote_style: ~
+                    op: Eq
+                    right:
+                      Value:
+                        Placeholder: "?"
+                op: And
+                right:
+                  Nested:
+                    BinaryOp:
+                      left:
+                        BinaryOp:
+                          left:
+                            CompoundIdentifier:
+                              - value: eloScores
+                                quote_style: "\""
+                              - value: score
+                                quote_style: ~
+                          op: Gt
+                          right:
+                            CompoundIdentifier:
+                              - value: comparisonScore
+                                quote_style: "\""
+                              - value: score
+                                quote_style: ~
+                      op: Or
+                      right:
+                        Nested:
+                          BinaryOp:
+                            left:
+                              BinaryOp:
+                                left:
+                                  CompoundIdentifier:
+                                    - value: eloScores
+                                      quote_style: "\""
+                                    - value: score
+                                      quote_style: ~
+                                op: Eq
+                                right:
+                                  CompoundIdentifier:
+                                    - value: comparisonScore
+                                      quote_style: "\""
+                                    - value: score
+                                      quote_style: ~
+                            op: And
+                            right:
+                              BinaryOp:
+                                left:
+                                  CompoundIdentifier:
+                                    - value: eloScores
+                                      quote_style: "\""
+                                    - value: thingId
+                                      quote_style: ~
+                                op: Gt
+                                right:
+                                  CompoundIdentifier:
+                                    - value: comparisonScore
+                                      quote_style: "\""
+                                    - value: thingId
+                                      quote_style: ~
+            group_by:
+              Expressions: []
+            cluster_by: []
+            distribute_by: []
+            sort_by: []
+            having: ~
+            named_window: []
+            qualify: ~
+        order_by: []
+        limit:
+          Value:
+            Placeholder: "?"
+        limit_by: []
+        offset:
+          value:
+            Value:
+              Placeholder: "?"
+          rows: None
+        fetch: ~
+        locks: []
+        for_clause: ~

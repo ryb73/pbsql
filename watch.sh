@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-cargo watch -c -x check -x "test -- --show-output"
+cargo watch -i src/snapshots -c -x check -x "insta test --review" -x "test -- --show-output"

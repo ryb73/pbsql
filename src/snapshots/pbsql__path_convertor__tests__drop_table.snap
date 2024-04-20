@@ -1,0 +1,19 @@
+---
+source: src/path_convertor.rs
+expression: translate_result
+---
+Ok:
+  - ~/heyy: main
+  - - DROP TABLE main.table_contents
+  - - Drop:
+        object_type: Table
+        if_exists: false
+        names:
+          - - value: main
+              quote_style: ~
+            - value: table_contents
+              quote_style: ~
+        cascade: false
+        restrict: false
+        purge: false
+        temporary: false

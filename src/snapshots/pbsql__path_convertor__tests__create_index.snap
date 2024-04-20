@@ -1,0 +1,30 @@
+---
+source: src/path_convertor.rs
+expression: translate_result
+---
+Ok:
+  - ~/books/eloScores: main
+  - - CREATE INDEX main.tbl_scoreIndex ON table_contents(score)
+  - - CreateIndex:
+        name:
+          - value: main
+            quote_style: ~
+          - value: tbl_scoreIndex
+            quote_style: ~
+        table_name:
+          - value: table_contents
+            quote_style: ~
+        using: ~
+        columns:
+          - expr:
+              Identifier:
+                value: score
+                quote_style: ~
+            asc: ~
+            nulls_first: ~
+        unique: false
+        concurrently: false
+        if_not_exists: false
+        include: []
+        nulls_distinct: ~
+        predicate: ~

@@ -1,0 +1,25 @@
+---
+source: src/path_convertor.rs
+expression: translate_result
+---
+Ok:
+  - ~/heyy: main
+    ~/okokok: db1
+  - - "DROP TABLE main.table_contents,"
+    - db1.table_contents
+  - - Drop:
+        object_type: Table
+        if_exists: false
+        names:
+          - - value: main
+              quote_style: ~
+            - value: table_contents
+              quote_style: ~
+          - - value: db1
+              quote_style: ~
+            - value: table_contents
+              quote_style: ~
+        cascade: false
+        restrict: false
+        purge: false
+        temporary: false
