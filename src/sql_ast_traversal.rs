@@ -13,7 +13,7 @@ use super::{VALUES_TABLE_INDEX_PREFIX, VALUES_TABLE_NAME};
 use sqlparser::ast::{
     self, Assignment, Expr, Function, FunctionArg, FunctionArgExpr, GroupByExpr,
     HiveDistributionStyle, HiveFormat, Ident, JoinConstraint, ObjectName, ObjectType, OnConflict,
-    Select, SelectItem, TableAlias, TableFactor, TableWithJoins, Value, WildcardAdditionalOptions,
+    Select, SelectItem, TableAlias, Value, WildcardAdditionalOptions,
 };
 use std::collections::HashMap;
 use typed_path::Utf8UnixPathBuf;
@@ -522,64 +522,6 @@ impl SqlAstTraverser for PathConvertor {
         }
 
         Ok(())
-    }
-
-    fn traverse_table_factor_table(
-        &mut self,
-        relation: &mut TableFactorTableViewMut,
-    ) -> TraversalResult {
-        self.pre_visit_table_factor_table(relation)?;
-
-        let TableFactorTableViewMut {
-            alias: _,
-            args,
-            name: _,
-            partitions: _,
-            version,
-            with_hints,
-        } = relation;
-
-        if args.is_some() {
-            return Err("not implemented: TableFactor::Table::args".to_string());
-        }
-
-        if version.is_some() {
-            return Err("not implemented: TableFactor::Table::version".to_string());
-        }
-
-        if !with_hints.is_empty() {
-            return Err("not implemented: TableFactor::Table::with_hints".to_string());
-        }
-
-        self.post_visit_table_factor_table(relation)
-    }
-
-    fn traverse_table_factor_derived(
-        &mut self,
-        derived_table_factor_view: &mut TableFactorDerivedViewMut,
-    ) -> TraversalResult {
-        self.pre_visit_table_factor_derived(derived_table_factor_view)?;
-
-        let TableFactorDerivedViewMut {
-            lateral: _,
-            subquery,
-            alias: _,
-        } = derived_table_factor_view;
-
-        self.traverse_ast_query(subquery)?;
-
-        self.post_visit_table_factor_derived(derived_table_factor_view)
-    }
-
-    fn traverse_select_tables(&mut self, tables: &mut Vec<TableWithJoins>) -> TraversalResult {
-        self.pre_visit_select_tables(tables)?;
-
-        tables
-            .iter_mut()
-            .map(|t| self.traverse_table_with_joins(t))
-            .collect::<Result<Vec<_>, String>>()?;
-
-        self.post_visit_select_tables(tables)
     }
 
     fn traverse_select(&mut self, select: &mut Box<Select>) -> TraversalResult {

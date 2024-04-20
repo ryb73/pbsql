@@ -941,13 +941,62 @@ pub trait SqlAstTraverser<Error = String> {
 
     fn traverse_table_factor_derived(
         &mut self,
-        relation: &mut TableFactorDerivedViewMut,
-    ) -> TraversalResult;
+        derived_table_factor_view: &mut TableFactorDerivedViewMut,
+    ) -> TraversalResult {
+        self.pre_visit_table_factor_derived(derived_table_factor_view)?;
+
+        let TableFactorDerivedViewMut {
+            lateral: _,
+            subquery,
+            alias: _,
+        } = derived_table_factor_view;
+
+        self.traverse_ast_query(subquery)?;
+
+        self.post_visit_table_factor_derived(derived_table_factor_view)
+    }
+
     fn traverse_table_factor_table(
         &mut self,
         relation: &mut TableFactorTableViewMut,
-    ) -> TraversalResult;
-    fn traverse_select_tables(&mut self, tables: &mut Vec<TableWithJoins>) -> TraversalResult;
+    ) -> TraversalResult {
+        self.pre_visit_table_factor_table(relation)?;
+
+        let TableFactorTableViewMut {
+            alias: _,
+            args,
+            name: _,
+            partitions: _,
+            version,
+            with_hints,
+        } = relation;
+
+        if args.is_some() {
+            return Err("not implemented: TableFactor::Table::args".to_string());
+        }
+
+        if version.is_some() {
+            return Err("not implemented: TableFactor::Table::version".to_string());
+        }
+
+        if !with_hints.is_empty() {
+            return Err("not implemented: TableFactor::Table::with_hints".to_string());
+        }
+
+        self.post_visit_table_factor_table(relation)
+    }
+
+    fn traverse_select_tables(&mut self, tables: &mut Vec<TableWithJoins>) -> TraversalResult {
+        self.pre_visit_select_tables(tables)?;
+
+        tables
+            .iter_mut()
+            .map(|t| self.traverse_table_with_joins(t))
+            .collect::<Result<Vec<_>, String>>()?;
+
+        self.post_visit_select_tables(tables)
+    }
+
     fn traverse_select(&mut self, select: &mut Box<Select>) -> TraversalResult;
     fn traverse_select_item(&mut self, select_item: &mut SelectItem) -> TraversalResult;
     fn traverse_expr(&mut self, expr: &mut Expr) -> TraversalResult;
