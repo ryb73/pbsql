@@ -544,6 +544,17 @@ impl SqlAstTraverser for PathConvertor {
         Ok(())
     }
 
+    fn pre_visit_function_arg_expr(
+        &mut self,
+        function_arg_expr: &mut FunctionArgExpr,
+    ) -> VisitResult {
+        if let FunctionArgExpr::QualifiedWildcard(_) = function_arg_expr {
+            return Err("Unhandled syntax: FunctionArgExpr::QualifiedWildcard".to_string());
+        }
+
+        Ok(())
+    }
+
     fn traverse_function_arg_expr(
         &mut self,
         function_arg_expr: &mut FunctionArgExpr,
@@ -553,10 +564,7 @@ impl SqlAstTraverser for PathConvertor {
         match function_arg_expr {
             FunctionArgExpr::Expr(expr) => self.traverse_expr(expr),
             FunctionArgExpr::Wildcard => Ok(()),
-
-            FunctionArgExpr::QualifiedWildcard(_) => {
-                Err("Unhandled syntax: FunctionArgExpr::QualifiedWildcard".to_string())
-            }
+            FunctionArgExpr::QualifiedWildcard(_) => Ok(()),
         }?;
 
         self.post_visit_function_arg_expr(function_arg_expr)
