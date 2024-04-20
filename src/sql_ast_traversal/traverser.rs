@@ -1,15 +1,14 @@
+use super::ast_views::{
+    CreateIndexStatementViewMutable, CreateTableStatementViewMutable, DropStatementViewMutable,
+    InSubqueryExprViewMutable, InsertStatementViewMutable, SetOperationViewMutable,
+    TableFactorDerivedViewMut, TableFactorTableViewMut, UpdateStatementViewMutable,
+};
 use sqlparser::ast::{
     self, Assignment, Expr, Function, FunctionArg, FunctionArgExpr, GroupByExpr, Ident, Join,
     JoinConstraint, JoinOperator, Offset, OnConflict, OnConflictAction, OnInsert, OrderByExpr,
     Select, SelectItem, SetExpr,
     Statement::{self, CreateIndex, CreateTable, Insert},
     TableFactor, TableWithJoins, Value, Values, WildcardAdditionalOptions,
-};
-
-use super::ast_views::{
-    CreateIndexStatementViewMutable, CreateTableStatementViewMutable, DropStatementViewMutable,
-    InSubqueryExprViewMutable, InsertStatementViewMutable, SetOperationViewMutable,
-    TableFactorDerivedViewMut, TableFactorTableViewMut, UpdateStatementViewMutable,
 };
 
 pub type VisitResult = Result<(), String>;
