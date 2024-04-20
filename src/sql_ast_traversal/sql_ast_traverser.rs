@@ -1213,8 +1213,54 @@ pub trait SqlAstTraverser<Error = String> {
         self.post_visit_in_subquery(in_subquery)
     }
 
-    fn traverse_function(&mut self, func: &mut Function) -> TraversalResult;
-    fn traverse_function_arg(&mut self, function_arg: &mut FunctionArg) -> TraversalResult;
+    fn traverse_function(&mut self, func: &mut Function) -> TraversalResult {
+        self.pre_visit_function(func)?;
+
+        let Function {
+            args,
+            distinct: _,
+            filter,
+            name,
+            null_treatment: _,
+            order_by,
+            over,
+            // "special" apparently means the function's parentheses are omitted
+            special: _,
+        } = func;
+
+        if filter.is_some() {
+            return Err("Unhandled syntax: Function::filter".to_string());
+        }
+
+        if !order_by.is_empty() {
+            return Err("Unhandled syntax: Function::order_by".to_string());
+        }
+
+        if over.is_some() {
+            return Err("Unhandled syntax: Function::over".to_string());
+        }
+
+        args.iter_mut()
+            .map(|arg| self.traverse_function_arg(arg))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        self.post_visit_function(func)
+    }
+
+    fn traverse_function_arg(&mut self, function_arg: &mut FunctionArg) -> TraversalResult {
+        self.pre_visit_function_arg(function_arg)?;
+
+        match function_arg {
+            FunctionArg::Unnamed(function_arg_expr) => {
+                self.traverse_function_arg_expr(function_arg_expr)
+            }
+
+            FunctionArg::Named { .. } => Err("Unhandled syntax: FunctionArg::Named".to_string()),
+        }?;
+
+        self.post_visit_function_arg(function_arg)
+    }
+
     fn traverse_function_arg_expr(
         &mut self,
         function_arg_expr: &mut FunctionArgExpr,
