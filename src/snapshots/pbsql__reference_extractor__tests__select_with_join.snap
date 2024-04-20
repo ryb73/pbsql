@@ -1,0 +1,19 @@
+---
+source: src/reference_extractor.rs
+expression: translate_result
+---
+Ok:
+  indices: []
+  relations:
+    - - value: ~/books/eloScores
+        quote_style: "\""
+  original_sql:
+    - ""
+    - "            SELECT"
+    - "                winner.score AS \"winnerScore\", loser.score AS \"loserScore\""
+    - "            FROM \"~/books/eloScores\" AS \"winner\""
+    - "            INNER JOIN \"~/books/eloScores\" AS \"loser\""
+    - "            WHERE"
+    - "                winner.thing_id = ?"
+    - "                AND loser.thing_id = ?"
+    - "        "

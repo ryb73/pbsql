@@ -1,0 +1,14 @@
+---
+source: src/reference_extractor.rs
+expression: translate_result
+---
+Ok:
+  indices: []
+  relations:
+    - - value: ~/books/matches
+        quote_style: "\""
+  original_sql:
+    - ""
+    - "            INSERT INTO \"~/books/matches\" (\"id\", \"loserId\", \"winnerId\", \"matchDate\")"
+    - "            VALUES (?, ?, DATETIME('now'), CURRENT_TIMESTAMP)"
+    - "        "

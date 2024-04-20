@@ -1,0 +1,15 @@
+---
+source: src/reference_extractor.rs
+expression: translate_result
+---
+Ok:
+  indices:
+    - - value: a
+        quote_style: ~
+  relations:
+    - - value: x
+        quote_style: ~
+      - value: y
+        quote_style: ~
+  original_sql:
+    - CREATE INDEX a ON x.y (score)

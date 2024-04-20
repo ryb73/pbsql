@@ -1,0 +1,5 @@
+---
+source: src/reference_extractor.rs
+expression: translate_result
+---
+Err: "not implemented: Statement::Close"

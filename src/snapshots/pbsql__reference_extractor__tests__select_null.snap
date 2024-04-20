@@ -1,0 +1,9 @@
+---
+source: src/reference_extractor.rs
+expression: translate_result
+---
+Ok:
+  indices: []
+  relations: []
+  original_sql:
+    - SELECT null

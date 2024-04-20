@@ -1,4 +1,5 @@
 mod path_convertor;
+mod reference_extractor;
 mod sql_ast_traversal;
 
 use path_convertor::{DatabaseNamesByPath, PathConvertor};

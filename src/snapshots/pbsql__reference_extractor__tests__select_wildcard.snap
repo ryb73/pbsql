@@ -1,0 +1,11 @@
+---
+source: src/reference_extractor.rs
+expression: translate_result
+---
+Ok:
+  indices: []
+  relations:
+    - - value: ~/heyy
+        quote_style: "\""
+  original_sql:
+    - "select * from \"~/heyy\""

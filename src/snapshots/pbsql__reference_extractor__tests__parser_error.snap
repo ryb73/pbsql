@@ -1,0 +1,5 @@
+---
+source: src/reference_extractor.rs
+expression: translate_result
+---
+Err: "sql parser error: Unterminated string literal at Line: 3, Column 62"

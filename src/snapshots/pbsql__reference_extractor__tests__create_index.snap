@@ -1,0 +1,13 @@
+---
+source: src/reference_extractor.rs
+expression: translate_result
+---
+Ok:
+  indices:
+    - - value: scoreIndex
+        quote_style: "\""
+  relations:
+    - - value: ~/books/eloScores
+        quote_style: "\""
+  original_sql:
+    - "CREATE INDEX \"scoreIndex\" ON \"~/books/eloScores\" (score)"

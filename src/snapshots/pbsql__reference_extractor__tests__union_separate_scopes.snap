@@ -1,0 +1,21 @@
+---
+source: src/reference_extractor.rs
+expression: translate_result
+---
+Ok:
+  indices: []
+  relations:
+    - - value: ~/books/non-things
+        quote_style: "\""
+    - - value: ~/books/things
+        quote_style: "\""
+  original_sql:
+    - ""
+    - "            select \"~/books/things\".id, \"~/books/things\".title"
+    - "            from \"~/books/non-things\" as \"~/books/things\""
+    - ""
+    - "            union"
+    - ""
+    - "            select \"~/books/things\".id, \"~/books/things\".title"
+    - "            from \"~/books/things\""
+    - "        "

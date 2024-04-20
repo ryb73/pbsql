@@ -1,0 +1,16 @@
+---
+source: src/reference_extractor.rs
+expression: translate_result
+---
+Ok:
+  indices: []
+  relations:
+    - - value: ~/my-data-scraper/reelgood/shows-and-movies
+        quote_style: "\""
+  original_sql:
+    - ""
+    - "            insert into \"~/my-data-scraper/reelgood/shows-and-movies\""
+    - "            (\"format\", \"isWatched\", \"name\", \"url\", \"imageUrl\")"
+    - "            values (?, ?, ?, ?, ?)"
+    - "            on conflict do nothing"
+    - "        "

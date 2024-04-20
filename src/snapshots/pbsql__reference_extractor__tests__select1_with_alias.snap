@@ -1,0 +1,18 @@
+---
+source: src/reference_extractor.rs
+expression: translate_result
+---
+Ok:
+  indices: []
+  relations:
+    - - value: ~/books/things
+        quote_style: "\""
+  original_sql:
+    - ""
+    - "            SELECT"
+    - "                things.id, things.title, things.subtitle, things.image_url, things.external_link,"
+    - "                things.external_link_title, things.excluded"
+    - "            FROM \"~/books/things\" AS \"things\""
+    - "            WHERE things.id = ?"
+    - "            LIMIT 1"
+    - "        "

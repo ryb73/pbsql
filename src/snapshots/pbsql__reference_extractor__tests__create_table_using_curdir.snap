@@ -1,0 +1,21 @@
+---
+source: src/reference_extractor.rs
+expression: translate_result
+---
+Ok:
+  indices: []
+  relations:
+    - - value: ~/books/./things/.
+        quote_style: "\""
+  original_sql:
+    - ""
+    - "            CREATE TABLE IF NOT EXISTS \"~/books/./things/.\" ("
+    - "                \"excluded\" BOOLEAN NOT NULL DEFAULT FALSE,"
+    - "                \"externalLink\" TEXT NOT NULL,"
+    - "                \"externalLinkTitle\" TEXT NOT NULL,"
+    - "                \"id\" TEXT PRIMARY KEY NOT NULL,"
+    - "                \"imageUrl\" TEXT NOT NULL,"
+    - "                \"subtitle\" TEXT NULL,"
+    - "                \"title\" TEXT NOT NULL"
+    - "            )"
+    - "        "

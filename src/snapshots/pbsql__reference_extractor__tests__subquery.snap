@@ -1,0 +1,23 @@
+---
+source: src/reference_extractor.rs
+expression: translate_result
+---
+Ok:
+  indices: []
+  relations:
+    - - value: ~/books/eloScores
+        quote_style: "\""
+    - - value: ~/books/matches
+        quote_style: "\""
+  original_sql:
+    - ""
+    - "            SELECT"
+    - "                loserId, winnerId"
+    - "            FROM \"~/books/matches\""
+    - "            WHERE loserId IN ("
+    - "                SELECT thingId"
+    - "                FROM \"~/books/eloScores\""
+    - "                ORDER BY score DESC, thingId DESC"
+    - "                LIMIT 15"
+    - "            )"
+    - "        "

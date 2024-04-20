@@ -1,0 +1,11 @@
+---
+source: src/reference_extractor.rs
+expression: translate_result
+---
+Ok:
+  indices: []
+  relations:
+    - - value: ~/books/eloScores
+        quote_style: "\""
+  original_sql:
+    - "UPDATE \"~/books/eloScores\" SET \"score\" = ? WHERE \"thingId\" = ?"
