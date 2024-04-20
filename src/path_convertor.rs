@@ -5,11 +5,10 @@ use super::sql_ast_traversal::{
         TableFactorTableViewMut, UpdateStatementViewMutable,
     },
     helpers::{extract_binary_identifiers, extract_unary_identifier},
-    sql_ast_traverser::VisitResult,
+    traverser::VisitResult,
 };
 use crate::{
-    sql_ast_traversal::sql_ast_traverser::SqlAstTraverser, VALUES_TABLE_INDEX_PREFIX,
-    VALUES_TABLE_NAME,
+    sql_ast_traversal::traverser::SqlAstTraverser, VALUES_TABLE_INDEX_PREFIX, VALUES_TABLE_NAME,
 };
 use sqlparser::ast::{
     self, Assignment, Function, FunctionArgExpr, HiveDistributionStyle, HiveFormat, Ident,
