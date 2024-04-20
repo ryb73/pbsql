@@ -555,14 +555,12 @@ impl SqlAstTraverser for PathConvertor {
         Ok(())
     }
 
-    fn traverse_value(&mut self, value: &mut Value) -> TraversalResult {
-        self.pre_visit_value(value)?;
-
+    fn pre_visit_value(&mut self, value: &mut Value) -> VisitResult {
         match value {
-            Value::Placeholder(s) => self.traverse_value_placeholder(s),
-            Value::SingleQuotedString(_) => Ok(()),
-            Value::Number(_, _) => Ok(()),
-            Value::Null => Ok(()),
+            Value::Placeholder(_)
+            | Value::SingleQuotedString(_)
+            | Value::Number(_, _)
+            | Value::Null => Ok(()),
 
             Value::DollarQuotedString(_) => {
                 Err("Unhandled value: Value::DollarQuotedString".to_string())
@@ -590,6 +588,29 @@ impl SqlAstTraverser for PathConvertor {
             }
             Value::Boolean(_) => Err("Unhandled value: Value::Boolean".to_string()),
             Value::UnQuotedString(_) => Err("Unhandled value: Value::UnQuotedString".to_string()),
+        }?;
+
+        Ok(())
+    }
+
+    fn traverse_value(&mut self, value: &mut Value) -> TraversalResult {
+        self.pre_visit_value(value)?;
+
+        match value {
+            Value::Placeholder(s) => self.traverse_value_placeholder(s),
+            Value::SingleQuotedString(_)
+            | Value::Number(_, _)
+            | Value::Null
+            | Value::DollarQuotedString(_)
+            | Value::EscapedStringLiteral(_)
+            | Value::SingleQuotedByteStringLiteral(_)
+            | Value::DoubleQuotedByteStringLiteral(_)
+            | Value::RawStringLiteral(_)
+            | Value::NationalStringLiteral(_)
+            | Value::HexStringLiteral(_)
+            | Value::DoubleQuotedString(_)
+            | Value::Boolean(_)
+            | Value::UnQuotedString(_) => Ok(()),
         }?;
 
         self.post_visit_value(value)
