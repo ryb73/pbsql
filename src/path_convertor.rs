@@ -899,15 +899,7 @@ mod tests {
         let sql = r#"CREATE INDEX a.b ON "~/books/eloScores" (score)"#;
 
         let translate_result = translate_sql(sql);
-
-        if let Err(err) = translate_result {
-            assert_eq!(
-                err,
-                "Expected 1 identifiers for the index name, got: [\"a\", \"b\"]"
-            );
-        } else {
-            panic!("Expected error, got: {:?}", translate_result);
-        }
+        insta::assert_yaml_snapshot!(translate_result);
     }
 
     #[test]
@@ -915,15 +907,7 @@ mod tests {
         let sql = r#"CREATE INDEX a ON x.y (score)"#;
 
         let translate_result = translate_sql(sql);
-
-        if let Err(err) = translate_result {
-            assert_eq!(
-                err,
-                "Expected 1 identifiers for the table name, got: [\"x\", \"y\"]"
-            );
-        } else {
-            panic!("Expected error, got: {:?}", translate_result);
-        }
+        insta::assert_yaml_snapshot!(translate_result);
     }
 
     #[test]
@@ -956,15 +940,7 @@ mod tests {
         "#;
 
         let translate_result = translate_sql(sql);
-
-        if let Err(err) = translate_result {
-            assert_eq!(
-                err,
-                "sql parser error: Unterminated string literal at Line: 3, Column 62"
-            );
-        } else {
-            panic!("Expected error, got: {:?}", translate_result);
-        }
+        insta::assert_yaml_snapshot!(translate_result);
     }
 
     #[test]
@@ -1086,8 +1062,8 @@ mod tests {
     fn unsupported_function() {
         let sql = "SELECT badfunc()";
 
-        let msg = translate_sql(sql).unwrap_err();
-        assert_eq!(msg, "Unsupported function: badfunc")
+        let result = translate_sql(sql);
+        insta::assert_yaml_snapshot!(result);
     }
 
     #[test]

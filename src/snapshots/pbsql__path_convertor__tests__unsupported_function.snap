@@ -1,0 +1,5 @@
+---
+source: src/path_convertor.rs
+expression: result
+---
+Err: "Unsupported function: badfunc"
