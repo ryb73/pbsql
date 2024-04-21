@@ -1,0 +1,138 @@
+---
+source: src/object_name_replacer.rs
+expression: translate_result
+---
+Ok:
+  original_query:
+    - "select \"~/books/things\".id, \"~/books/things\".title"
+    - "from \"~/books/non-things\" as \"~/books/things\""
+    - ""
+    - union
+    - ""
+    - "select \"~/books/things\".id, \"~/books/things\".title"
+    - "from \"~/books/things\""
+  names_to_replace:
+    ? - ~/books/non-things
+    : - non_books
+      - tbl
+    ? - ~/books/things
+    : - my_books
+      - tbl
+  output_query:
+    - SELECT
+    - "  \"~/books/things\".id,"
+    - "  \"~/books/things\".title"
+    - FROM
+    - "  non_books.tbl AS \"~/books/things\""
+    - UNION
+    - SELECT
+    - "  my_books.tbl.id,"
+    - "  my_books.tbl.title"
+    - FROM
+    - "  my_books.tbl"
+  output_ast:
+    - Query:
+        with: ~
+        body:
+          SetOperation:
+            op: Union
+            set_quantifier: None
+            left:
+              Select:
+                distinct: ~
+                top: ~
+                projection:
+                  - UnnamedExpr:
+                      CompoundIdentifier:
+                        - value: ~/books/things
+                          quote_style: "\""
+                        - value: id
+                          quote_style: ~
+                  - UnnamedExpr:
+                      CompoundIdentifier:
+                        - value: ~/books/things
+                          quote_style: "\""
+                        - value: title
+                          quote_style: ~
+                into: ~
+                from:
+                  - relation:
+                      Table:
+                        name:
+                          - value: non_books
+                            quote_style: ~
+                          - value: tbl
+                            quote_style: ~
+                        alias:
+                          name:
+                            value: ~/books/things
+                            quote_style: "\""
+                          columns: []
+                        args: ~
+                        with_hints: []
+                        version: ~
+                        partitions: []
+                    joins: []
+                lateral_views: []
+                selection: ~
+                group_by:
+                  Expressions: []
+                cluster_by: []
+                distribute_by: []
+                sort_by: []
+                having: ~
+                named_window: []
+                qualify: ~
+            right:
+              Select:
+                distinct: ~
+                top: ~
+                projection:
+                  - UnnamedExpr:
+                      CompoundIdentifier:
+                        - value: my_books
+                          quote_style: ~
+                        - value: tbl
+                          quote_style: ~
+                        - value: id
+                          quote_style: ~
+                  - UnnamedExpr:
+                      CompoundIdentifier:
+                        - value: my_books
+                          quote_style: ~
+                        - value: tbl
+                          quote_style: ~
+                        - value: title
+                          quote_style: ~
+                into: ~
+                from:
+                  - relation:
+                      Table:
+                        name:
+                          - value: my_books
+                            quote_style: ~
+                          - value: tbl
+                            quote_style: ~
+                        alias: ~
+                        args: ~
+                        with_hints: []
+                        version: ~
+                        partitions: []
+                    joins: []
+                lateral_views: []
+                selection: ~
+                group_by:
+                  Expressions: []
+                cluster_by: []
+                distribute_by: []
+                sort_by: []
+                having: ~
+                named_window: []
+                qualify: ~
+        order_by: []
+        limit: ~
+        limit_by: []
+        offset: ~
+        fetch: ~
+        locks: []
+        for_clause: ~

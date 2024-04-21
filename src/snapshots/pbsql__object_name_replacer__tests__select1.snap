@@ -1,0 +1,145 @@
+---
+source: src/object_name_replacer.rs
+expression: translate_result
+---
+Ok:
+  original_query:
+    - SELECT
+    - "    \"~/books/things\".id, \"~/books/things\".title, \"~/books/things\".subtitle,"
+    - "    \"~/books/things\".image_url, \"~/books/things\".external_link,"
+    - "    \"~/books/things\".external_link_title, \"~/books/things\".excluded"
+    - "FROM \"~/books/things\""
+    - "WHERE \"~/books/things\".id = ?"
+    - LIMIT 1
+  names_to_replace:
+    ? - ~/books/things
+    : - my_books
+      - tbl
+  output_query:
+    - SELECT
+    - "  my_books.tbl.id,"
+    - "  my_books.tbl.title,"
+    - "  my_books.tbl.subtitle,"
+    - "  my_books.tbl.image_url,"
+    - "  my_books.tbl.external_link,"
+    - "  my_books.tbl.external_link_title,"
+    - "  my_books.tbl.excluded"
+    - FROM
+    - "  my_books.tbl"
+    - WHERE
+    - "  my_books.tbl.id = ?"
+    - LIMIT
+    - "  1"
+  output_ast:
+    - Query:
+        with: ~
+        body:
+          Select:
+            distinct: ~
+            top: ~
+            projection:
+              - UnnamedExpr:
+                  CompoundIdentifier:
+                    - value: my_books
+                      quote_style: ~
+                    - value: tbl
+                      quote_style: ~
+                    - value: id
+                      quote_style: ~
+              - UnnamedExpr:
+                  CompoundIdentifier:
+                    - value: my_books
+                      quote_style: ~
+                    - value: tbl
+                      quote_style: ~
+                    - value: title
+                      quote_style: ~
+              - UnnamedExpr:
+                  CompoundIdentifier:
+                    - value: my_books
+                      quote_style: ~
+                    - value: tbl
+                      quote_style: ~
+                    - value: subtitle
+                      quote_style: ~
+              - UnnamedExpr:
+                  CompoundIdentifier:
+                    - value: my_books
+                      quote_style: ~
+                    - value: tbl
+                      quote_style: ~
+                    - value: image_url
+                      quote_style: ~
+              - UnnamedExpr:
+                  CompoundIdentifier:
+                    - value: my_books
+                      quote_style: ~
+                    - value: tbl
+                      quote_style: ~
+                    - value: external_link
+                      quote_style: ~
+              - UnnamedExpr:
+                  CompoundIdentifier:
+                    - value: my_books
+                      quote_style: ~
+                    - value: tbl
+                      quote_style: ~
+                    - value: external_link_title
+                      quote_style: ~
+              - UnnamedExpr:
+                  CompoundIdentifier:
+                    - value: my_books
+                      quote_style: ~
+                    - value: tbl
+                      quote_style: ~
+                    - value: excluded
+                      quote_style: ~
+            into: ~
+            from:
+              - relation:
+                  Table:
+                    name:
+                      - value: my_books
+                        quote_style: ~
+                      - value: tbl
+                        quote_style: ~
+                    alias: ~
+                    args: ~
+                    with_hints: []
+                    version: ~
+                    partitions: []
+                joins: []
+            lateral_views: []
+            selection:
+              BinaryOp:
+                left:
+                  CompoundIdentifier:
+                    - value: my_books
+                      quote_style: ~
+                    - value: tbl
+                      quote_style: ~
+                    - value: id
+                      quote_style: ~
+                op: Eq
+                right:
+                  Value:
+                    Placeholder: "?"
+            group_by:
+              Expressions: []
+            cluster_by: []
+            distribute_by: []
+            sort_by: []
+            having: ~
+            named_window: []
+            qualify: ~
+        order_by: []
+        limit:
+          Value:
+            Number:
+              - "1"
+              - false
+        limit_by: []
+        offset: ~
+        fetch: ~
+        locks: []
+        for_clause: ~

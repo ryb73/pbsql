@@ -1,0 +1,135 @@
+---
+source: src/object_name_replacer.rs
+expression: translate_result
+---
+Ok:
+  original_query:
+    - SELECT
+    - "    winner.score AS \"winnerScore\", loser.score AS \"loserScore\""
+    - "FROM \"~/books/eloScores\" AS \"winner\""
+    - "INNER JOIN \"~/books/eloScores\" AS \"loser\""
+    - WHERE
+    - "    winner.thing_id = ?"
+    - "    AND loser.thing_id = ?"
+  names_to_replace:
+    ? - ~/books/eloScores
+    : - my_books
+      - tbl
+  output_query:
+    - SELECT
+    - "  \"winner\".score AS \"winnerScore\","
+    - "  \"loser\".score AS \"loserScore\""
+    - FROM
+    - "  my_books.tbl AS \"winner\""
+    - "  JOIN my_books.tbl AS \"loser\""
+    - WHERE
+    - "  \"winner\".thing_id = ?"
+    - "  AND \"loser\".thing_id = ?"
+  output_ast:
+    - Query:
+        with: ~
+        body:
+          Select:
+            distinct: ~
+            top: ~
+            projection:
+              - ExprWithAlias:
+                  expr:
+                    CompoundIdentifier:
+                      - value: winner
+                        quote_style: "\""
+                      - value: score
+                        quote_style: ~
+                  alias:
+                    value: winnerScore
+                    quote_style: "\""
+              - ExprWithAlias:
+                  expr:
+                    CompoundIdentifier:
+                      - value: loser
+                        quote_style: "\""
+                      - value: score
+                        quote_style: ~
+                  alias:
+                    value: loserScore
+                    quote_style: "\""
+            into: ~
+            from:
+              - relation:
+                  Table:
+                    name:
+                      - value: my_books
+                        quote_style: ~
+                      - value: tbl
+                        quote_style: ~
+                    alias:
+                      name:
+                        value: winner
+                        quote_style: "\""
+                      columns: []
+                    args: ~
+                    with_hints: []
+                    version: ~
+                    partitions: []
+                joins:
+                  - relation:
+                      Table:
+                        name:
+                          - value: my_books
+                            quote_style: ~
+                          - value: tbl
+                            quote_style: ~
+                        alias:
+                          name:
+                            value: loser
+                            quote_style: "\""
+                          columns: []
+                        args: ~
+                        with_hints: []
+                        version: ~
+                        partitions: []
+                    join_operator:
+                      Inner: None
+            lateral_views: []
+            selection:
+              BinaryOp:
+                left:
+                  BinaryOp:
+                    left:
+                      CompoundIdentifier:
+                        - value: winner
+                          quote_style: "\""
+                        - value: thing_id
+                          quote_style: ~
+                    op: Eq
+                    right:
+                      Value:
+                        Placeholder: "?"
+                op: And
+                right:
+                  BinaryOp:
+                    left:
+                      CompoundIdentifier:
+                        - value: loser
+                          quote_style: "\""
+                        - value: thing_id
+                          quote_style: ~
+                    op: Eq
+                    right:
+                      Value:
+                        Placeholder: "?"
+            group_by:
+              Expressions: []
+            cluster_by: []
+            distribute_by: []
+            sort_by: []
+            having: ~
+            named_window: []
+            qualify: ~
+        order_by: []
+        limit: ~
+        limit_by: []
+        offset: ~
+        fetch: ~
+        locks: []
+        for_clause: ~

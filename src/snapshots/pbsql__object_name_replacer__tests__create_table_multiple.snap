@@ -1,0 +1,188 @@
+---
+source: src/object_name_replacer.rs
+expression: translate_result
+---
+Ok:
+  original_query:
+    - "CREATE TABLE IF NOT EXISTS \"~/books/things\" ("
+    - "    \"excluded\" BOOLEAN NOT NULL DEFAULT FALSE,"
+    - "    \"externalLink\" TEXT NOT NULL,"
+    - "    \"externalLinkTitle\" TEXT NOT NULL,"
+    - "    \"id\" TEXT PRIMARY KEY NOT NULL,"
+    - "    \"imageUrl\" TEXT NOT NULL,"
+    - "    \"subtitle\" TEXT NULL,"
+    - "    \"title\" TEXT NOT NULL"
+    - );
+    - "CREATE TABLE IF NOT EXISTS \"~/books/thongs\" ("
+    - "    \"title\" TEXT NOT NULL"
+    - );
+  names_to_replace:
+    ? - ~/books/things
+    : - my_books
+      - tbl
+    ? - ~/books/thongs
+    : - my_books2
+      - tbl
+  output_query:
+    - CREATE TABLE IF NOT EXISTS my_books.tbl (
+    - "  \"excluded\" BOOLEAN NOT NULL DEFAULT false,"
+    - "  \"externalLink\" TEXT NOT NULL,"
+    - "  \"externalLinkTitle\" TEXT NOT NULL,"
+    - "  \"id\" TEXT PRIMARY KEY NOT NULL,"
+    - "  \"imageUrl\" TEXT NOT NULL,"
+    - "  \"subtitle\" TEXT NULL,"
+    - "  \"title\" TEXT NOT NULL"
+    - ") CREATE TABLE IF NOT EXISTS my_books2.tbl (\"title\" TEXT NOT NULL)"
+  output_ast:
+    - CreateTable:
+        or_replace: false
+        temporary: false
+        external: false
+        global: ~
+        if_not_exists: true
+        transient: false
+        name:
+          - value: my_books
+            quote_style: ~
+          - value: tbl
+            quote_style: ~
+        columns:
+          - name:
+              value: excluded
+              quote_style: "\""
+            data_type: Boolean
+            collation: ~
+            options:
+              - name: ~
+                option: NotNull
+              - name: ~
+                option:
+                  Default:
+                    Value:
+                      Boolean: false
+          - name:
+              value: externalLink
+              quote_style: "\""
+            data_type: Text
+            collation: ~
+            options:
+              - name: ~
+                option: NotNull
+          - name:
+              value: externalLinkTitle
+              quote_style: "\""
+            data_type: Text
+            collation: ~
+            options:
+              - name: ~
+                option: NotNull
+          - name:
+              value: id
+              quote_style: "\""
+            data_type: Text
+            collation: ~
+            options:
+              - name: ~
+                option:
+                  Unique:
+                    is_primary: true
+                    characteristics: ~
+              - name: ~
+                option: NotNull
+          - name:
+              value: imageUrl
+              quote_style: "\""
+            data_type: Text
+            collation: ~
+            options:
+              - name: ~
+                option: NotNull
+          - name:
+              value: subtitle
+              quote_style: "\""
+            data_type: Text
+            collation: ~
+            options:
+              - name: ~
+                option: "Null"
+          - name:
+              value: title
+              quote_style: "\""
+            data_type: Text
+            collation: ~
+            options:
+              - name: ~
+                option: NotNull
+        constraints: []
+        hive_distribution: NONE
+        hive_formats:
+          row_format: ~
+          storage: ~
+          location: ~
+        table_properties: []
+        with_options: []
+        file_format: ~
+        location: ~
+        query: ~
+        without_rowid: false
+        like: ~
+        clone: ~
+        engine: ~
+        comment: ~
+        auto_increment_offset: ~
+        default_charset: ~
+        collation: ~
+        on_commit: ~
+        on_cluster: ~
+        order_by: ~
+        partition_by: ~
+        cluster_by: ~
+        options: ~
+        strict: false
+    - CreateTable:
+        or_replace: false
+        temporary: false
+        external: false
+        global: ~
+        if_not_exists: true
+        transient: false
+        name:
+          - value: my_books2
+            quote_style: ~
+          - value: tbl
+            quote_style: ~
+        columns:
+          - name:
+              value: title
+              quote_style: "\""
+            data_type: Text
+            collation: ~
+            options:
+              - name: ~
+                option: NotNull
+        constraints: []
+        hive_distribution: NONE
+        hive_formats:
+          row_format: ~
+          storage: ~
+          location: ~
+        table_properties: []
+        with_options: []
+        file_format: ~
+        location: ~
+        query: ~
+        without_rowid: false
+        like: ~
+        clone: ~
+        engine: ~
+        comment: ~
+        auto_increment_offset: ~
+        default_charset: ~
+        collation: ~
+        on_commit: ~
+        on_cluster: ~
+        order_by: ~
+        partition_by: ~
+        cluster_by: ~
+        options: ~
+        strict: false

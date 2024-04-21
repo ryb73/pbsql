@@ -1,0 +1,119 @@
+---
+source: src/object_name_replacer.rs
+expression: translate_result
+---
+Ok:
+  original_query:
+    - "INSERT INTO \"~/books/matches\" (\"id\", \"loserId\", \"winnerId\", \"matchDate\")"
+    - "SELECT \"~/books/matches\".\"id\" || '2', \"loserId\", \"~/books/matches\".\"winnerId\", \"matchDate\" FROM \"~/books/matches\""
+  names_to_replace:
+    ? - ~/books/matches
+    : - my_books
+      - tbl
+  output_query:
+    - INSERT INTO
+    - "  my_books.tbl (\"id\", \"loserId\", \"winnerId\", \"matchDate\")"
+    - SELECT
+    - "  my_books.tbl.id || '2',"
+    - "  \"loserId\","
+    - "  my_books.tbl.winnerId,"
+    - "  \"matchDate\""
+    - FROM
+    - "  my_books.tbl"
+  output_ast:
+    - Insert:
+        or: ~
+        ignore: false
+        into: true
+        table_name:
+          - value: my_books
+            quote_style: ~
+          - value: tbl
+            quote_style: ~
+        table_alias: ~
+        columns:
+          - value: id
+            quote_style: "\""
+          - value: loserId
+            quote_style: "\""
+          - value: winnerId
+            quote_style: "\""
+          - value: matchDate
+            quote_style: "\""
+        overwrite: false
+        source:
+          with: ~
+          body:
+            Select:
+              distinct: ~
+              top: ~
+              projection:
+                - UnnamedExpr:
+                    BinaryOp:
+                      left:
+                        CompoundIdentifier:
+                          - value: my_books
+                            quote_style: ~
+                          - value: tbl
+                            quote_style: ~
+                          - value: id
+                            quote_style: ~
+                      op: StringConcat
+                      right:
+                        Value:
+                          SingleQuotedString: "2"
+                - UnnamedExpr:
+                    Identifier:
+                      value: loserId
+                      quote_style: "\""
+                - UnnamedExpr:
+                    CompoundIdentifier:
+                      - value: my_books
+                        quote_style: ~
+                      - value: tbl
+                        quote_style: ~
+                      - value: winnerId
+                        quote_style: ~
+                - UnnamedExpr:
+                    Identifier:
+                      value: matchDate
+                      quote_style: "\""
+              into: ~
+              from:
+                - relation:
+                    Table:
+                      name:
+                        - value: my_books
+                          quote_style: ~
+                        - value: tbl
+                          quote_style: ~
+                      alias: ~
+                      args: ~
+                      with_hints: []
+                      version: ~
+                      partitions: []
+                  joins: []
+              lateral_views: []
+              selection: ~
+              group_by:
+                Expressions: []
+              cluster_by: []
+              distribute_by: []
+              sort_by: []
+              having: ~
+              named_window: []
+              qualify: ~
+          order_by: []
+          limit: ~
+          limit_by: []
+          offset: ~
+          fetch: ~
+          locks: []
+          for_clause: ~
+        partitioned: ~
+        after_columns: []
+        table: false
+        "on": ~
+        returning: ~
+        replace_into: false
+        priority: ~

@@ -1,0 +1,31 @@
+---
+source: src/object_name_replacer.rs
+expression: translate_result
+---
+Ok:
+  original_query:
+    - "drop table \"~/heyy\", \"~/okokok\""
+  names_to_replace:
+    ? - ~/heyy
+    : - my_books
+      - tbl
+    ? - ~/okokok
+    : - okokok
+  output_query:
+    - "DROP TABLE my_books.tbl,"
+    - okokok
+  output_ast:
+    - Drop:
+        object_type: Table
+        if_exists: false
+        names:
+          - - value: my_books
+              quote_style: ~
+            - value: tbl
+              quote_style: ~
+          - - value: okokok
+              quote_style: ~
+        cascade: false
+        restrict: false
+        purge: false
+        temporary: false

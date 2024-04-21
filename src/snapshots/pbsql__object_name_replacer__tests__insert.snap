@@ -1,0 +1,88 @@
+---
+source: src/object_name_replacer.rs
+expression: translate_result
+---
+Ok:
+  original_query:
+    - "INSERT INTO \"~/books/matches\" (\"id\", \"loserId\", \"winnerId\", \"matchDate\")"
+    - "VALUES (?, ?, DATETIME('now'), CURRENT_TIMESTAMP)"
+  names_to_replace:
+    ? - ~/books/matches
+    : - my_books
+      - tbl
+  output_query:
+    - INSERT INTO
+    - "  my_books.tbl (\"id\", \"loserId\", \"winnerId\", \"matchDate\")"
+    - VALUES
+    - "  (?, ?, DATETIME('now'), CURRENT_TIMESTAMP)"
+  output_ast:
+    - Insert:
+        or: ~
+        ignore: false
+        into: true
+        table_name:
+          - value: my_books
+            quote_style: ~
+          - value: tbl
+            quote_style: ~
+        table_alias: ~
+        columns:
+          - value: id
+            quote_style: "\""
+          - value: loserId
+            quote_style: "\""
+          - value: winnerId
+            quote_style: "\""
+          - value: matchDate
+            quote_style: "\""
+        overwrite: false
+        source:
+          with: ~
+          body:
+            Values:
+              explicit_row: false
+              rows:
+                - - Value:
+                      Placeholder: "?"
+                  - Value:
+                      Placeholder: "?"
+                  - Function:
+                      name:
+                        - value: DATETIME
+                          quote_style: ~
+                      args:
+                        - Unnamed:
+                            Expr:
+                              Value:
+                                SingleQuotedString: now
+                      filter: ~
+                      null_treatment: ~
+                      over: ~
+                      distinct: false
+                      special: false
+                      order_by: []
+                  - Function:
+                      name:
+                        - value: CURRENT_TIMESTAMP
+                          quote_style: ~
+                      args: []
+                      filter: ~
+                      null_treatment: ~
+                      over: ~
+                      distinct: false
+                      special: true
+                      order_by: []
+          order_by: []
+          limit: ~
+          limit_by: []
+          offset: ~
+          fetch: ~
+          locks: []
+          for_clause: ~
+        partitioned: ~
+        after_columns: []
+        table: false
+        "on": ~
+        returning: ~
+        replace_into: false
+        priority: ~

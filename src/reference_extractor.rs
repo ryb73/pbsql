@@ -41,6 +41,7 @@ impl SqlAstTraverser for ReferenceExtractor {
             ObjectType::Table | ObjectType::View => (),
 
             // TODO: implement index
+            // TODO: test these cases
             ObjectType::Index | ObjectType::Schema | ObjectType::Role => return Ok(()),
 
             // I don't think these are "relations", but I don't know what they actually are. so..

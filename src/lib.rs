@@ -1,3 +1,4 @@
+mod object_name_replacer;
 mod path_convertor;
 mod reference_extractor;
 mod sql_ast_traversal;
