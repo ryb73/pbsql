@@ -69,9 +69,11 @@ impl SqlAstTraverser for ObjectNameReplacer<'_> {
         match object_type {
             ObjectType::Table | ObjectType::View => (),
 
-            // TODO: implement index
             // TODO: test these cases
-            ObjectType::Index | ObjectType::Schema | ObjectType::Role => return Ok(()),
+            ObjectType::Schema | ObjectType::Role => return Ok(()),
+
+            // TODO: implement index
+            ObjectType::Index => return Err("not implemented: Drop::Index".to_string()),
 
             // I don't think these are "relations", but I don't know what they actually are. so..
             ObjectType::Sequence => return Err("not implemented: Drop::Sequence".to_string()),
@@ -966,6 +968,18 @@ mod tests {
                 vec!["x".to_string(), "y".to_string()],
                 vec!["scores".to_string(), "tbl".to_string()],
             )]),
+        };
+        let translate_result = translate_sql(sql, &names_to_replace);
+        insta::assert_yaml_snapshot!(translate_result);
+    }
+
+    #[test]
+    fn drop_index() {
+        let sql = r#"DROP INDEX "scoreIndex""#;
+
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::new(),
         };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
