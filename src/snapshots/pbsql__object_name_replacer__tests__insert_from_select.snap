@@ -7,9 +7,11 @@ Ok:
     - "INSERT INTO \"~/books/matches\" (\"id\", \"loserId\", \"winnerId\", \"matchDate\")"
     - "SELECT \"~/books/matches\".\"id\" || '2', \"loserId\", \"~/books/matches\".\"winnerId\", \"matchDate\" FROM \"~/books/matches\""
   names_to_replace:
-    ? - ~/books/matches
-    : - my_books
-      - tbl
+    indices_to_replace: {}
+    relations_to_replace:
+      ? - ~/books/matches
+      : - my_books
+        - tbl
   output_query:
     - INSERT INTO
     - "  my_books.tbl (\"id\", \"loserId\", \"winnerId\", \"matchDate\")"

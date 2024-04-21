@@ -30,12 +30,14 @@ Ok:
     - ORDER BY sum(sq.num_matches) ASC
     - LIMIT ?
   names_to_replace:
-    ? - ~/books/matches
-    : - my_books
-      - matches
-    ? - ~/books/things
-    : - my_books
-      - tbl
+    indices_to_replace: {}
+    relations_to_replace:
+      ? - ~/books/matches
+      : - my_books
+        - matches
+      ? - ~/books/things
+      : - my_books
+        - tbl
   output_query:
     - SELECT
     - "  \"sq\".id,"

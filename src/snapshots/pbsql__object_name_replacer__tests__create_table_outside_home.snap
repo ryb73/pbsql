@@ -14,10 +14,12 @@ Ok:
     - "    \"title\" TEXT NOT NULL"
     - )
   names_to_replace:
-    ? - asasa
-    : - sasas
-    ? - sasas
-    : - asasa
+    indices_to_replace: {}
+    relations_to_replace:
+      ? - asasa
+      : - sasas
+      ? - sasas
+      : - asasa
   output_query:
     - CREATE TABLE IF NOT EXISTS asasa (
     - "  \"excluded\" BOOLEAN NOT NULL DEFAULT false,"

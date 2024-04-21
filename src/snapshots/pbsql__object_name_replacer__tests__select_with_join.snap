@@ -12,9 +12,11 @@ Ok:
     - "    winner.thing_id = ?"
     - "    AND loser.thing_id = ?"
   names_to_replace:
-    ? - ~/books/eloScores
-    : - my_books
-      - tbl
+    indices_to_replace: {}
+    relations_to_replace:
+      ? - ~/books/eloScores
+      : - my_books
+        - tbl
   output_query:
     - SELECT
     - "  \"winner\".score AS \"winnerScore\","

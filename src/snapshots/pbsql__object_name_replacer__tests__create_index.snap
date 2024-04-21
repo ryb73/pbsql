@@ -1,0 +1,40 @@
+---
+source: src/object_name_replacer.rs
+expression: translate_result
+---
+Ok:
+  original_query:
+    - "CREATE INDEX \"scoreIndex\" ON \"~/books/eloScores\" (score)"
+  names_to_replace:
+    indices_to_replace:
+      scoreIndex: eloScoresIndex
+    relations_to_replace:
+      ? - ~/books/eloScores
+      : - scores
+        - tbl
+  output_query:
+    - CREATE INDEX scores.eloScoresIndex ON tbl(score)
+  output_ast:
+    - CreateIndex:
+        name:
+          - value: scores
+            quote_style: ~
+          - value: eloScoresIndex
+            quote_style: ~
+        table_name:
+          - value: tbl
+            quote_style: ~
+        using: ~
+        columns:
+          - expr:
+              Identifier:
+                value: score
+                quote_style: ~
+            asc: ~
+            nulls_first: ~
+        unique: false
+        concurrently: false
+        if_not_exists: false
+        include: []
+        nulls_distinct: ~
+        predicate: ~

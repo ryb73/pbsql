@@ -14,9 +14,11 @@ Ok:
     - "    \"title\" TEXT NOT NULL"
     - )
   names_to_replace:
-    ? - x
-      - y
-    : - my_books
+    indices_to_replace: {}
+    relations_to_replace:
+      ? - x
+        - y
+      : - my_books
   output_query:
     - CREATE TABLE IF NOT EXISTS my_books (
     - "  \"excluded\" BOOLEAN NOT NULL DEFAULT false,"

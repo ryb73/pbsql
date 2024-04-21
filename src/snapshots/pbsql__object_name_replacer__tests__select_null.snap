@@ -6,9 +6,11 @@ Ok:
   original_query:
     - SELECT null
   names_to_replace:
-    ? - ~/books/eloScores
-    : - my_books
-      - tbl
+    indices_to_replace: {}
+    relations_to_replace:
+      ? - ~/books/eloScores
+      : - my_books
+        - tbl
   output_query:
     - SELECT
     - "  NULL"

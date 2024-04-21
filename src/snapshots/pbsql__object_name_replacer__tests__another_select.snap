@@ -22,12 +22,14 @@ Ok:
     - "    )"
     - LIMIT ? OFFSET ?
   names_to_replace:
-    ? - ~/books/eloScores
-    : - my_books
-      - tbl
-    ? - ~/books/things
-    : - my_books
-      - tbl
+    indices_to_replace: {}
+    relations_to_replace:
+      ? - ~/books/eloScores
+      : - my_books
+        - tbl
+      ? - ~/books/things
+      : - my_books
+        - tbl
   output_query:
     - SELECT
     - "  COUNT(*) AS \"rank0\""

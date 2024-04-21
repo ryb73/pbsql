@@ -9,10 +9,12 @@ Ok:
     - "values (?, ?, ?, ?, ?)"
     - on conflict do nothing
   names_to_replace:
-    ? - ~/my-data-scraper/reelgood/shows-and-movies
-    : - shows
-      - and
-      - movies
+    indices_to_replace: {}
+    relations_to_replace:
+      ? - ~/my-data-scraper/reelgood/shows-and-movies
+      : - shows
+        - and
+        - movies
   output_query:
     - INSERT INTO
     - "  shows.and.movies (\"format\", \"isWatched\", \"name\", \"url\", \"imageUrl\")"

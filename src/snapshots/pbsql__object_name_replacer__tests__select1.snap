@@ -12,9 +12,11 @@ Ok:
     - "WHERE \"~/books/things\".id = ?"
     - LIMIT 1
   names_to_replace:
-    ? - ~/books/things
-    : - my_books
-      - tbl
+    indices_to_replace: {}
+    relations_to_replace:
+      ? - ~/books/things
+      : - my_books
+        - tbl
   output_query:
     - SELECT
     - "  my_books.tbl.id,"

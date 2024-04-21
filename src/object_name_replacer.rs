@@ -33,15 +33,22 @@ impl Scope {
     }
 }
 
+#[derive(Debug)]
+pub struct ObjectNamesToReplace {
+    indices_to_replace: HashMap<String, String>,
+    relations_to_replace: RelationsToReplace,
+}
+
+#[derive(Debug)]
 pub struct ObjectNameReplacer<'a> {
-    relations_to_replace: &'a RelationsToReplace,
+    object_names_to_replace: &'a ObjectNamesToReplace,
     scopes: Vec<Scope>,
 }
 
 impl<'a> ObjectNameReplacer<'a> {
-    pub fn _new(relations_to_replace: &'a RelationsToReplace) -> Self {
+    pub fn _new(object_names_to_replace: &'a ObjectNamesToReplace) -> ObjectNameReplacer<'a> {
         ObjectNameReplacer {
-            relations_to_replace,
+            object_names_to_replace,
             scopes: vec![Scope::new()],
         }
     }
@@ -76,7 +83,7 @@ impl SqlAstTraverser for ObjectNameReplacer<'_> {
             .map(|name| {
                 Ok(ObjectName(get_replacement_identifiers(
                     name,
-                    self.relations_to_replace,
+                    &self.object_names_to_replace.relations_to_replace,
                 )?))
             })
             .collect::<Result<Vec<_>, String>>()?;
@@ -220,36 +227,28 @@ impl SqlAstTraverser for ObjectNameReplacer<'_> {
     ) -> VisitResult {
         *create_table.name = ObjectName(get_replacement_identifiers(
             create_table.name,
-            &self.relations_to_replace,
+            &self.object_names_to_replace.relations_to_replace,
         )?);
 
         Ok(())
     }
 
-    fn pre_visit_create_index(
+    fn post_visit_create_index(
         &mut self,
         create_index: &mut CreateIndexStatementViewMutable,
     ) -> VisitResult {
         let CreateIndexStatementViewMutable {
             columns: _,
             name,
-            table_name: _,
+            table_name,
             unique: _,
             if_not_exists: _,
             nulls_distinct: _,
-            concurrently,
+            concurrently: _,
             include,
             predicate: _,
             using,
         } = create_index;
-
-        if name.is_none() {
-            return Err("Index name is required".to_string());
-        }
-
-        if **concurrently {
-            return Err("not implemented: CreateIndex::concurrently".to_string());
-        }
 
         if !include.is_empty() {
             return Err("not implemented: CreateIndex::include".to_string());
@@ -259,25 +258,40 @@ impl SqlAstTraverser for ObjectNameReplacer<'_> {
             return Err("not implemented: CreateIndex::using".to_string());
         }
 
-        Ok(())
-    }
+        let ObjectName(name_identifiers) =
+            name.as_ref().ok_or("Index name is required".to_string())?;
 
-    fn post_visit_create_index(
-        &mut self,
-        create_index: &mut CreateIndexStatementViewMutable,
-    ) -> VisitResult {
-        // let ObjectName(name_identifiers) = create_index.name.as_ref().unwrap();
+        let old_index_name = extract_unary_identifier(name_identifiers, "index")?;
 
-        // let index_name = extract_unary_identifier(name_identifiers, "index")?;
+        let new_index_name = self
+            .object_names_to_replace
+            .indices_to_replace
+            .get(&old_index_name)
+            .ok_or(format!("Unexpected index name: {}", old_index_name))?;
 
-        // let translated_db_name =
-        //     get_replacement_identifiers(&create_index.table_name, &self.relations_to_replace)?;
+        let ObjectName(table_name_identifiers) = table_name;
+        extract_unary_identifier(table_name_identifiers, "index table")?;
 
-        // *create_index.name = Some(ObjectName(vec![
-        //     Ident::new(translated_db_name),
-        //     Ident::new(format!("{}{}", VALUES_TABLE_INDEX_PREFIX, index_name)),
-        // ]));
-        // *create_index.table_name = ObjectName(vec![Ident::new(VALUES_TABLE_NAME)]);
+        let mut converted_table_reference = get_replacement_identifiers(
+            table_name,
+            &self.object_names_to_replace.relations_to_replace,
+        )?;
+
+        // TODO: change the model so that this check isn't needed
+        if converted_table_reference.len() < 1 || converted_table_reference.len() > 2 {
+            return Err("Expected 1 or 2 identifiers for the table reference".to_string());
+        }
+
+        let new_table_name = converted_table_reference.pop().unwrap();
+        let new_schema_name = converted_table_reference.pop();
+
+        **name = Some(if let Some(schema_name) = new_schema_name {
+            ObjectName(vec![schema_name, Ident::new(new_index_name)])
+        } else {
+            ObjectName(vec![Ident::new(new_index_name)])
+        });
+
+        **table_name = ObjectName(vec![new_table_name]);
 
         Ok(())
     }
@@ -333,7 +347,7 @@ impl SqlAstTraverser for ObjectNameReplacer<'_> {
 
         **table_name = ObjectName(get_replacement_identifiers(
             table_name,
-            &self.relations_to_replace,
+            &self.object_names_to_replace.relations_to_replace,
         )?);
 
         Ok(())
@@ -409,13 +423,13 @@ impl SqlAstTraverser for ObjectNameReplacer<'_> {
         add_to_referencable_tables(
             &Some(&table_name),
             alias,
-            &self.relations_to_replace,
+            &self.object_names_to_replace.relations_to_replace,
             &mut scope.referencable_tables,
         )?;
 
         **table_name = ObjectName(get_replacement_identifiers(
             table_name,
-            &self.relations_to_replace,
+            &self.object_names_to_replace.relations_to_replace,
         )?);
 
         Ok(())
@@ -439,7 +453,7 @@ impl SqlAstTraverser for ObjectNameReplacer<'_> {
         add_to_referencable_tables(
             &None,
             alias,
-            &self.relations_to_replace,
+            &self.object_names_to_replace.relations_to_replace,
             &mut scope.referencable_tables,
         )?;
 
@@ -626,14 +640,23 @@ mod tests {
     use super::*;
 
     #[derive(serde::Serialize)]
+    struct ObjectNamesToReplaceBTree {
+        indices_to_replace: BTreeMap<String, String>,
+        relations_to_replace: BTreeMap<Vec<String>, Vec<String>>,
+    }
+
+    #[derive(serde::Serialize)]
     struct Report {
         original_query: Vec<String>,
-        names_to_replace: BTreeMap<Vec<String>, Vec<String>>,
+        names_to_replace: ObjectNamesToReplaceBTree,
         output_query: Vec<String>,
         output_ast: Vec<Statement>,
     }
 
-    fn translate_sql(query: &str, names_to_replace: &RelationsToReplace) -> Result<Report, String> {
+    fn translate_sql(
+        query: &str,
+        names_to_replace: &ObjectNamesToReplace,
+    ) -> Result<Report, String> {
         let dialect = SQLiteDialect {};
 
         let mut ast = Parser::parse_sql(&dialect, query).map_err(|e| e.to_string())?;
@@ -649,10 +672,18 @@ mod tests {
                 .map(|s| s.trim_start_matches("            "))
                 .map(|s| s.to_string())
                 .collect(),
-            names_to_replace: names_to_replace
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect::<BTreeMap<_, _>>(),
+            names_to_replace: ObjectNamesToReplaceBTree {
+                indices_to_replace: names_to_replace
+                    .indices_to_replace
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect(),
+                relations_to_replace: names_to_replace
+                    .relations_to_replace
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect(),
+            },
             output_query: sqlformat::format(
                 &ast.iter().map(|s| s.to_string()).collect::<String>(),
                 &sqlformat::QueryParams::None,
@@ -679,10 +710,13 @@ mod tests {
             )
         "#;
 
-        let names_to_replace = HashMap::from_iter([(
-            vec!["~/books/things".to_string()],
-            vec!["my_books".to_string(), "tbl".to_string()],
-        )]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([(
+                vec!["~/books/things".to_string()],
+                vec!["my_books".to_string(), "tbl".to_string()],
+            )]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -701,10 +735,13 @@ mod tests {
             )
         "#;
 
-        let names_to_replace = HashMap::from_iter([(
-            vec!["~/books/bings/../things".to_string()],
-            vec!["my_books".to_string()],
-        )]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([(
+                vec!["~/books/bings/../things".to_string()],
+                vec!["my_books".to_string()],
+            )]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -723,10 +760,13 @@ mod tests {
             )
         "#;
 
-        let names_to_replace = HashMap::from_iter([(
-            vec!["~/books/./things/.".to_string()],
-            vec!["my_books".to_string()],
-        )]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([(
+                vec!["~/books/./things/.".to_string()],
+                vec!["my_books".to_string()],
+            )]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -745,10 +785,13 @@ mod tests {
             )
         "#;
 
-        let names_to_replace = HashMap::from_iter([(
-            vec!["x".to_string(), "y".to_string()],
-            vec!["my_books".to_string()],
-        )]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([(
+                vec!["x".to_string(), "y".to_string()],
+                vec!["my_books".to_string()],
+            )]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -757,7 +800,10 @@ mod tests {
     fn unsupported_statement_type() {
         let sql = r#"close my_eyes;"#;
 
-        let names_to_replace = HashMap::new();
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::new(),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -776,10 +822,13 @@ mod tests {
             )
         "#;
 
-        let names_to_replace = HashMap::from_iter([
-            (vec!["sasas".to_string()], vec!["asasa".to_string()]),
-            (vec!["asasa".to_string()], vec!["sasas".to_string()]),
-        ]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([
+                (vec!["sasas".to_string()], vec!["asasa".to_string()]),
+                (vec!["asasa".to_string()], vec!["sasas".to_string()]),
+            ]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -798,8 +847,13 @@ mod tests {
             )
         "#;
 
-        let names_to_replace =
-            HashMap::from_iter([(vec!["/dev/null".to_string()], vec!["dev_null".to_string()])]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([(
+                vec!["/dev/null".to_string()],
+                vec!["dev_null".to_string()],
+            )]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -818,10 +872,13 @@ mod tests {
             )
         "#;
 
-        let names_to_replace = HashMap::from_iter([(
-            vec!["~/hi/../../etc/passwd".to_string()],
-            vec!["etc".to_string(), "passwd".to_string()],
-        )]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([(
+                vec!["~/hi/../../etc/passwd".to_string()],
+                vec!["etc".to_string(), "passwd".to_string()],
+            )]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -843,43 +900,76 @@ mod tests {
             );
         "#;
 
-        let names_to_replace = HashMap::from_iter([
-            (
-                vec!["~/books/things".to_string()],
-                vec!["my_books".to_string(), "tbl".to_string()],
-            ),
-            (
-                vec!["~/books/thongs".to_string()],
-                vec!["my_books2".to_string(), "tbl".to_string()],
-            ),
-        ]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([
+                (
+                    vec!["~/books/things".to_string()],
+                    vec!["my_books".to_string(), "tbl".to_string()],
+                ),
+                (
+                    vec!["~/books/thongs".to_string()],
+                    vec!["my_books2".to_string(), "tbl".to_string()],
+                ),
+            ]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
 
-    // #[test]
-    // fn create_index() {
-    //     let sql = r#"CREATE INDEX "scoreIndex" ON "~/books/eloScores" (score)"#;
+    #[test]
+    fn create_index() {
+        let sql = r#"CREATE INDEX "scoreIndex" ON "~/books/eloScores" (score)"#;
 
-    //     let translate_result = translate_sql(sql);
-    //     insta::assert_yaml_snapshot!(translate_result);
-    // }
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::from_iter([(
+                "scoreIndex".to_string(),
+                "eloScoresIndex".to_string(),
+            )]),
+            relations_to_replace: HashMap::from_iter([(
+                vec!["~/books/eloScores".to_string()],
+                vec!["scores".to_string(), "tbl".to_string()],
+            )]),
+        };
+        let translate_result = translate_sql(sql, &names_to_replace);
+        insta::assert_yaml_snapshot!(translate_result);
+    }
 
-    // #[test]
-    // fn create_index_compound_name() {
-    //     let sql = r#"CREATE INDEX a.b ON "~/books/eloScores" (score)"#;
+    #[test]
+    fn create_index_compound_name() {
+        let sql = r#"CREATE INDEX a.b ON "~/books/eloScores" (score)"#;
 
-    //     let translate_result = translate_sql(sql);
-    //     insta::assert_yaml_snapshot!(translate_result);
-    // }
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::from_iter([(
+                "b".to_string(),
+                "eloScoresIndex".to_string(),
+            )]),
+            relations_to_replace: HashMap::from_iter([(
+                vec!["~/books/eloScores".to_string()],
+                vec!["scores".to_string(), "tbl".to_string()],
+            )]),
+        };
+        let translate_result = translate_sql(sql, &names_to_replace);
+        insta::assert_yaml_snapshot!(translate_result);
+    }
 
-    // #[test]
-    // fn create_index_compound_table_name() {
-    //     let sql = r#"CREATE INDEX a ON x.y (score)"#;
+    #[test]
+    fn create_index_compound_table_name() {
+        let sql = r#"CREATE INDEX a ON x.y (score)"#;
 
-    //     let translate_result = translate_sql(sql);
-    //     insta::assert_yaml_snapshot!(translate_result);
-    // }
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::from_iter([(
+                "a".to_string(),
+                "eloScoresIndex".to_string(),
+            )]),
+            relations_to_replace: HashMap::from_iter([(
+                vec!["x".to_string(), "y".to_string()],
+                vec!["scores".to_string(), "tbl".to_string()],
+            )]),
+        };
+        let translate_result = translate_sql(sql, &names_to_replace);
+        insta::assert_yaml_snapshot!(translate_result);
+    }
 
     #[test]
     fn insert() {
@@ -888,10 +978,13 @@ mod tests {
             VALUES (?, ?, DATETIME('now'), CURRENT_TIMESTAMP)
         "#;
 
-        let names_to_replace = HashMap::from_iter([(
-            vec!["~/books/matches".to_string()],
-            vec!["my_books".to_string(), "tbl".to_string()],
-        )]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([(
+                vec!["~/books/matches".to_string()],
+                vec!["my_books".to_string(), "tbl".to_string()],
+            )]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -903,10 +996,13 @@ mod tests {
             SELECT "~/books/matches"."id" || '2', "loserId", "~/books/matches"."winnerId", "matchDate" FROM "~/books/matches"
         "#;
 
-        let names_to_replace = HashMap::from_iter([(
-            vec!["~/books/matches".to_string()],
-            vec!["my_books".to_string(), "tbl".to_string()],
-        )]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([(
+                vec!["~/books/matches".to_string()],
+                vec!["my_books".to_string(), "tbl".to_string()],
+            )]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -918,10 +1014,13 @@ mod tests {
             VALUES (?, ?, DATETIME('now'), CURRENT_TIMESTAMP('derp))
         "#;
 
-        let names_to_replace = HashMap::from_iter([(
-            vec!["~/books/matches".to_string()],
-            vec!["my_books".to_string(), "tbl".to_string()],
-        )]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([(
+                vec!["~/books/matches".to_string()],
+                vec!["my_books".to_string(), "tbl".to_string()],
+            )]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -937,16 +1036,19 @@ mod tests {
             LIMIT 1
         "#;
 
-        let names_to_replace = HashMap::from_iter([
-            (
-                vec!["~/books/things".to_string()],
-                vec!["my_books".to_string(), "tbl".to_string()],
-            ),
-            (
-                vec!["~/something/else/for/fun".to_string()],
-                vec!["hola".to_string(), "tbl".to_string()],
-            ),
-        ]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([
+                (
+                    vec!["~/books/things".to_string()],
+                    vec!["my_books".to_string(), "tbl".to_string()],
+                ),
+                (
+                    vec!["~/something/else/for/fun".to_string()],
+                    vec!["hola".to_string(), "tbl".to_string()],
+                ),
+            ]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -963,10 +1065,13 @@ mod tests {
             LIMIT 1
         "#;
 
-        let names_to_replace = HashMap::from_iter([(
-            vec!["~/books/things".to_string()],
-            vec!["my_books".to_string(), "tbl".to_string()],
-        )]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([(
+                vec!["~/books/things".to_string()],
+                vec!["my_books".to_string(), "tbl".to_string()],
+            )]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -983,10 +1088,13 @@ mod tests {
                 AND loser.thing_id = ?
         "#;
 
-        let names_to_replace = HashMap::from_iter([(
-            vec!["~/books/eloScores".to_string()],
-            vec!["my_books".to_string(), "tbl".to_string()],
-        )]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([(
+                vec!["~/books/eloScores".to_string()],
+                vec!["my_books".to_string(), "tbl".to_string()],
+            )]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -995,10 +1103,13 @@ mod tests {
     fn select_null() {
         let sql = "SELECT null";
 
-        let names_to_replace = HashMap::from_iter([(
-            vec!["~/books/eloScores".to_string()],
-            vec!["my_books".to_string(), "tbl".to_string()],
-        )]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([(
+                vec!["~/books/eloScores".to_string()],
+                vec!["my_books".to_string(), "tbl".to_string()],
+            )]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -1007,10 +1118,13 @@ mod tests {
     fn update() {
         let sql = r#"UPDATE "~/books/eloScores" SET "score" = ? WHERE "thingId" = ?"#;
 
-        let names_to_replace = HashMap::from_iter([(
-            vec!["~/books/eloScores".to_string()],
-            vec!["my_books".to_string(), "tbl".to_string()],
-        )]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([(
+                vec!["~/books/eloScores".to_string()],
+                vec!["my_books".to_string(), "tbl".to_string()],
+            )]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -1029,16 +1143,19 @@ mod tests {
             )
         "#;
 
-        let names_to_replace = HashMap::from_iter([
-            (
-                vec!["~/books/matches".to_string()],
-                vec!["my_books".to_string(), "tbl".to_string()],
-            ),
-            (
-                vec!["~/books/eloScores".to_string()],
-                vec!["super".to_string(), "scores".to_string(), "tbl".to_string()],
-            ),
-        ]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([
+                (
+                    vec!["~/books/matches".to_string()],
+                    vec!["my_books".to_string(), "tbl".to_string()],
+                ),
+                (
+                    vec!["~/books/eloScores".to_string()],
+                    vec!["super".to_string(), "scores".to_string(), "tbl".to_string()],
+                ),
+            ]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -1073,16 +1190,19 @@ mod tests {
             LIMIT ?
         "#;
 
-        let names_to_replace = HashMap::from_iter([
-            (
-                vec!["~/books/things".to_string()],
-                vec!["my_books".to_string(), "tbl".to_string()],
-            ),
-            (
-                vec!["~/books/matches".to_string()],
-                vec!["my_books".to_string(), "matches".to_string()],
-            ),
-        ]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([
+                (
+                    vec!["~/books/things".to_string()],
+                    vec!["my_books".to_string(), "tbl".to_string()],
+                ),
+                (
+                    vec!["~/books/matches".to_string()],
+                    vec!["my_books".to_string(), "matches".to_string()],
+                ),
+            ]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -1091,10 +1211,13 @@ mod tests {
     fn a_function() {
         let sql = "SELECT badfunc()";
 
-        let names_to_replace = HashMap::from_iter([(
-            vec!["~/books/eloScores".to_string()],
-            vec!["my_books".to_string(), "tbl".to_string()],
-        )]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([(
+                vec!["~/books/eloScores".to_string()],
+                vec!["my_books".to_string(), "tbl".to_string()],
+            )]),
+        };
         let result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(result);
     }
@@ -1121,16 +1244,19 @@ mod tests {
             LIMIT ? OFFSET ?
         "#;
 
-        let names_to_replace = HashMap::from_iter([
-            (
-                vec!["~/books/eloScores".to_string()],
-                vec!["my_books".to_string(), "tbl".to_string()],
-            ),
-            (
-                vec!["~/books/things".to_string()],
-                vec!["my_books".to_string(), "tbl".to_string()],
-            ),
-        ]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([
+                (
+                    vec!["~/books/eloScores".to_string()],
+                    vec!["my_books".to_string(), "tbl".to_string()],
+                ),
+                (
+                    vec!["~/books/things".to_string()],
+                    vec!["my_books".to_string(), "tbl".to_string()],
+                ),
+            ]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -1165,16 +1291,19 @@ mod tests {
             limit ?
         "#;
 
-        let names_to_replace = HashMap::from_iter([
-            (
-                vec!["~/books/things".to_string()],
-                vec!["my_books".to_string(), "tbl".to_string()],
-            ),
-            (
-                vec!["~/books/matches".to_string()],
-                vec!["my_books".to_string(), "matches".to_string()],
-            ),
-        ]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([
+                (
+                    vec!["~/books/things".to_string()],
+                    vec!["my_books".to_string(), "tbl".to_string()],
+                ),
+                (
+                    vec!["~/books/matches".to_string()],
+                    vec!["my_books".to_string(), "matches".to_string()],
+                ),
+            ]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -1183,15 +1312,18 @@ mod tests {
     fn select_wildcard() {
         let sql = r#"select * from "~/heyy"."/is"."/for"."/horses"#;
 
-        let names_to_replace = HashMap::from_iter([(
-            vec![
-                "~/heyy".to_string(),
-                "/is".to_string(),
-                "/for".to_string(),
-                "/horses".to_string(),
-            ],
-            vec!["my_books".to_string(), "tbl".to_string()],
-        )]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([(
+                vec![
+                    "~/heyy".to_string(),
+                    "/is".to_string(),
+                    "/for".to_string(),
+                    "/horses".to_string(),
+                ],
+                vec!["my_books".to_string(), "tbl".to_string()],
+            )]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -1200,10 +1332,13 @@ mod tests {
     fn drop_table() {
         let sql = r#"drop table "~/heyy""#;
 
-        let names_to_replace = HashMap::from_iter([(
-            vec!["~/heyy".to_string()],
-            vec!["my_books".to_string(), "tbl".to_string()],
-        )]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([(
+                vec!["~/heyy".to_string()],
+                vec!["my_books".to_string(), "tbl".to_string()],
+            )]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -1212,13 +1347,16 @@ mod tests {
     fn drop_multiple_tables() {
         let sql = r#"drop table "~/heyy", "~/okokok""#;
 
-        let names_to_replace = HashMap::from_iter([
-            (
-                vec!["~/heyy".to_string()],
-                vec!["my_books".to_string(), "tbl".to_string()],
-            ),
-            (vec!["~/okokok".to_string()], vec!["okokok".to_string()]),
-        ]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([
+                (
+                    vec!["~/heyy".to_string()],
+                    vec!["my_books".to_string(), "tbl".to_string()],
+                ),
+                (vec!["~/okokok".to_string()], vec!["okokok".to_string()]),
+            ]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -1232,10 +1370,13 @@ mod tests {
             on conflict do nothing
         "#;
 
-        let names_to_replace = HashMap::from_iter([(
-            vec!["~/my-data-scraper/reelgood/shows-and-movies".to_string()],
-            vec!["shows".to_string(), "and".to_string(), "movies".to_string()],
-        )]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([(
+                vec!["~/my-data-scraper/reelgood/shows-and-movies".to_string()],
+                vec!["shows".to_string(), "and".to_string(), "movies".to_string()],
+            )]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }
@@ -1252,16 +1393,19 @@ mod tests {
             from "~/books/things"
         "#;
 
-        let names_to_replace = HashMap::from_iter([
-            (
-                vec!["~/books/things".to_string()],
-                vec!["my_books".to_string(), "tbl".to_string()],
-            ),
-            (
-                vec!["~/books/non-things".to_string()],
-                vec!["non_books".to_string(), "tbl".to_string()],
-            ),
-        ]);
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([
+                (
+                    vec!["~/books/things".to_string()],
+                    vec!["my_books".to_string(), "tbl".to_string()],
+                ),
+                (
+                    vec!["~/books/non-things".to_string()],
+                    vec!["non_books".to_string(), "tbl".to_string()],
+                ),
+            ]),
+        };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
     }

@@ -14,9 +14,11 @@ Ok:
     - "    \"title\" TEXT NOT NULL"
     - )
   names_to_replace:
-    ? - ~/hi/../../etc/passwd
-    : - etc
-      - passwd
+    indices_to_replace: {}
+    relations_to_replace:
+      ? - ~/hi/../../etc/passwd
+      : - etc
+        - passwd
   output_query:
     - CREATE TABLE IF NOT EXISTS etc.passwd (
     - "  \"excluded\" BOOLEAN NOT NULL DEFAULT false,"

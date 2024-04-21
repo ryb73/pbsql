@@ -6,9 +6,11 @@ Ok:
   original_query:
     - "UPDATE \"~/books/eloScores\" SET \"score\" = ? WHERE \"thingId\" = ?"
   names_to_replace:
-    ? - ~/books/eloScores
-    : - my_books
-      - tbl
+    indices_to_replace: {}
+    relations_to_replace:
+      ? - ~/books/eloScores
+      : - my_books
+        - tbl
   output_query:
     - UPDATE
     - "  my_books.tbl"

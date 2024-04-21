@@ -6,9 +6,11 @@ Ok:
   original_query:
     - "drop table \"~/heyy\""
   names_to_replace:
-    ? - ~/heyy
-    : - my_books
-      - tbl
+    indices_to_replace: {}
+    relations_to_replace:
+      ? - ~/heyy
+      : - my_books
+        - tbl
   output_query:
     - DROP TABLE my_books.tbl
   output_ast:

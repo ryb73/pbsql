@@ -14,8 +14,10 @@ Ok:
     - "    \"title\" TEXT NOT NULL"
     - )
   names_to_replace:
-    ? - /dev/null
-    : - dev_null
+    indices_to_replace: {}
+    relations_to_replace:
+      ? - /dev/null
+      : - dev_null
   output_query:
     - CREATE TABLE IF NOT EXISTS dev_null (
     - "  \"excluded\" BOOLEAN NOT NULL DEFAULT false,"

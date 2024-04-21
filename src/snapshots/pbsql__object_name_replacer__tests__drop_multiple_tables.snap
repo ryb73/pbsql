@@ -6,11 +6,13 @@ Ok:
   original_query:
     - "drop table \"~/heyy\", \"~/okokok\""
   names_to_replace:
-    ? - ~/heyy
-    : - my_books
-      - tbl
-    ? - ~/okokok
-    : - okokok
+    indices_to_replace: {}
+    relations_to_replace:
+      ? - ~/heyy
+      : - my_books
+        - tbl
+      ? - ~/okokok
+      : - okokok
   output_query:
     - "DROP TABLE my_books.tbl,"
     - okokok

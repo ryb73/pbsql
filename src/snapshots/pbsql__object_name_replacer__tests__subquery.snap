@@ -14,13 +14,15 @@ Ok:
     - "    LIMIT 15"
     - )
   names_to_replace:
-    ? - ~/books/eloScores
-    : - super
-      - scores
-      - tbl
-    ? - ~/books/matches
-    : - my_books
-      - tbl
+    indices_to_replace: {}
+    relations_to_replace:
+      ? - ~/books/eloScores
+      : - super
+        - scores
+        - tbl
+      ? - ~/books/matches
+      : - my_books
+        - tbl
   output_query:
     - SELECT
     - "  loserId,"

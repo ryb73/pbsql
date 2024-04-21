@@ -11,12 +11,14 @@ Ok:
     - WHERE things.id = ?
     - LIMIT 1
   names_to_replace:
-    ? - ~/books/things
-    : - my_books
-      - tbl
-    ? - ~/something/else/for/fun
-    : - hola
-      - tbl
+    indices_to_replace: {}
+    relations_to_replace:
+      ? - ~/books/things
+      : - my_books
+        - tbl
+      ? - ~/something/else/for/fun
+      : - hola
+        - tbl
   output_query:
     - SELECT
     - "  \"things\".id,"

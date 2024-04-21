@@ -12,12 +12,14 @@ Ok:
     - "select \"~/books/things\".id, \"~/books/things\".title"
     - "from \"~/books/things\""
   names_to_replace:
-    ? - ~/books/non-things
-    : - non_books
-      - tbl
-    ? - ~/books/things
-    : - my_books
-      - tbl
+    indices_to_replace: {}
+    relations_to_replace:
+      ? - ~/books/non-things
+      : - non_books
+        - tbl
+      ? - ~/books/things
+      : - my_books
+        - tbl
   output_query:
     - SELECT
     - "  \"~/books/things\".id,"
