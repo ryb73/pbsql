@@ -14,7 +14,7 @@ use sqlparser::ast::{
 };
 use std::collections::HashMap;
 
-pub type DatabaseNamesByPath = HashMap<Vec<String>, Vec<String>>;
+type RelationsToReplace = HashMap<Vec<String>, Vec<String>>;
 
 type TableReference = String;
 type ReplacementIdentifiers = Vec<Ident>;
@@ -34,14 +34,14 @@ impl Scope {
 }
 
 pub struct ObjectNameReplacer<'a> {
-    database_names: &'a DatabaseNamesByPath,
+    relations_to_replace: &'a RelationsToReplace,
     scopes: Vec<Scope>,
 }
 
 impl<'a> ObjectNameReplacer<'a> {
-    pub fn new(database_names: &'a DatabaseNamesByPath) -> Self {
+    pub fn _new(relations_to_replace: &'a RelationsToReplace) -> Self {
         ObjectNameReplacer {
-            database_names,
+            relations_to_replace,
             scopes: vec![Scope::new()],
         }
     }
@@ -74,9 +74,9 @@ impl SqlAstTraverser for ObjectNameReplacer<'_> {
         let new_names = names
             .iter()
             .map(|name| {
-                Ok(ObjectName(convert_path_to_database(
+                Ok(ObjectName(get_replacement_identifiers(
                     name,
-                    self.database_names,
+                    self.relations_to_replace,
                 )?))
             })
             .collect::<Result<Vec<_>, String>>()?;
@@ -218,9 +218,9 @@ impl SqlAstTraverser for ObjectNameReplacer<'_> {
         &mut self,
         create_table: &mut CreateTableStatementViewMutable,
     ) -> VisitResult {
-        *create_table.name = ObjectName(convert_path_to_database(
+        *create_table.name = ObjectName(get_replacement_identifiers(
             create_table.name,
-            &self.database_names,
+            &self.relations_to_replace,
         )?);
 
         Ok(())
@@ -271,7 +271,7 @@ impl SqlAstTraverser for ObjectNameReplacer<'_> {
         // let index_name = extract_unary_identifier(name_identifiers, "index")?;
 
         // let translated_db_name =
-        //     convert_path_to_database(&create_index.table_name, &self.database_names)?;
+        //     get_replacement_identifiers(&create_index.table_name, &self.relations_to_replace)?;
 
         // *create_index.name = Some(ObjectName(vec![
         //     Ident::new(translated_db_name),
@@ -331,7 +331,10 @@ impl SqlAstTraverser for ObjectNameReplacer<'_> {
             table: _,
         } = insert;
 
-        **table_name = ObjectName(convert_path_to_database(table_name, &self.database_names)?);
+        **table_name = ObjectName(get_replacement_identifiers(
+            table_name,
+            &self.relations_to_replace,
+        )?);
 
         Ok(())
     }
@@ -406,11 +409,14 @@ impl SqlAstTraverser for ObjectNameReplacer<'_> {
         add_to_referencable_tables(
             &Some(&table_name),
             alias,
-            &self.database_names,
+            &self.relations_to_replace,
             &mut scope.referencable_tables,
         )?;
 
-        **table_name = ObjectName(convert_path_to_database(table_name, &self.database_names)?);
+        **table_name = ObjectName(get_replacement_identifiers(
+            table_name,
+            &self.relations_to_replace,
+        )?);
 
         Ok(())
     }
@@ -433,7 +439,7 @@ impl SqlAstTraverser for ObjectNameReplacer<'_> {
         add_to_referencable_tables(
             &None,
             alias,
-            &self.database_names,
+            &self.relations_to_replace,
             &mut scope.referencable_tables,
         )?;
 
@@ -530,11 +536,11 @@ impl SqlAstTraverser for ObjectNameReplacer<'_> {
     }
 }
 
-fn convert_path_to_database(
+fn get_replacement_identifiers(
     ObjectName(identifiers): &ObjectName,
-    databases: &DatabaseNamesByPath,
+    relations_to_replace: &RelationsToReplace,
 ) -> Result<Vec<Ident>, String> {
-    let output_ident_values = databases
+    let output_ident_values = relations_to_replace
         .get(
             &identifiers
                 .iter()
@@ -552,7 +558,7 @@ fn convert_path_to_database(
 fn add_to_referencable_tables(
     table_name: &Option<&ObjectName>,
     alias: &Option<TableAlias>,
-    databases: &DatabaseNamesByPath,
+    relations_to_replace: &RelationsToReplace,
     referencable_tables: &mut ReferencableTables,
 ) -> Result<(), String> {
     match (table_name, alias) {
@@ -580,7 +586,7 @@ fn add_to_referencable_tables(
 
             let path = extract_unary_identifier(name_identifiers, "table")?;
 
-            let db_reference = convert_path_to_database(table_name, databases)?;
+            let db_reference = get_replacement_identifiers(table_name, relations_to_replace)?;
 
             if referencable_tables.contains_key(&path) {
                 return Err(format!("Duplicate table name: {}", path));
@@ -627,15 +633,12 @@ mod tests {
         output_ast: Vec<Statement>,
     }
 
-    fn translate_sql(
-        query: &str,
-        names_to_replace: &DatabaseNamesByPath,
-    ) -> Result<Report, String> {
+    fn translate_sql(query: &str, names_to_replace: &RelationsToReplace) -> Result<Report, String> {
         let dialect = SQLiteDialect {};
 
         let mut ast = Parser::parse_sql(&dialect, query).map_err(|e| e.to_string())?;
 
-        let mut object_name_replacer = ObjectNameReplacer::new(names_to_replace);
+        let mut object_name_replacer = ObjectNameReplacer::_new(names_to_replace);
 
         object_name_replacer.traverse(&mut ast)?;
 
