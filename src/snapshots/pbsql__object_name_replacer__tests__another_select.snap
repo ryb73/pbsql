@@ -16,8 +16,8 @@ Ok:
     - "    AND ("
     - "        eloScores.score > comparisonScore.score"
     - "        OR ("
-    - eloScores.score = comparisonScore.score
-    - AND eloScores.thingId > comparisonScore.thingId
+    - "            eloScores.score = comparisonScore.score"
+    - "            AND eloScores.thingId > comparisonScore.thingId"
     - "        )"
     - "    )"
     - LIMIT ? OFFSET ?

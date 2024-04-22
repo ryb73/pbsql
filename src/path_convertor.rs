@@ -692,10 +692,7 @@ fn get_replacement_identifiers_for_table<'a>(
         }
     }
 
-    Err(format!(
-        "Unknown table reference: {} ({:?})",
-        table_reference, scopes
-    ))
+    Err(format!("Unknown table reference: {}", table_reference))
 }
 
 #[cfg(test)]
@@ -1170,6 +1167,17 @@ mod tests {
 
             select "~/books/things".id, "~/books/things".title
             from "~/books/things"
+        "#;
+
+        let translate_result = translate_sql(sql);
+        insta::assert_yaml_snapshot!(translate_result);
+    }
+
+    #[test]
+    fn unknown_table_reference() {
+        let sql = r#"
+            select "~/books/things".id, "~/books/things".title
+            from "~/books/non-things" as "books"
         "#;
 
         let translate_result = translate_sql(sql);

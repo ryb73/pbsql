@@ -1,0 +1,25 @@
+---
+source: src/object_name_replacer.rs
+expression: translate_result
+---
+Ok:
+  original_query:
+    - "drop role \"my-role\""
+  names_to_replace:
+    indices_to_replace: {}
+    relations_to_replace:
+      ? - my-role
+      : - your-role
+  output_query:
+    - "DROP ROLE \"my-role\""
+  output_ast:
+    - Drop:
+        object_type: Role
+        if_exists: false
+        names:
+          - - value: my-role
+              quote_style: "\""
+        cascade: false
+        restrict: false
+        purge: false
+        temporary: false

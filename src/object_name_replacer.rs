@@ -556,14 +556,14 @@ fn get_replacement_identifiers(
     ObjectName(identifiers): &ObjectName,
     relations_to_replace: &RelationsToReplace,
 ) -> Result<Vec<Ident>, String> {
+    let ident_values = &identifiers
+        .iter()
+        .map(|ident| ident.value.clone())
+        .collect::<Vec<_>>();
+
     let output_ident_values = relations_to_replace
-        .get(
-            &identifiers
-                .iter()
-                .map(|ident| ident.value.clone())
-                .collect::<Vec<_>>(),
-        )
-        .ok_or("Unexpected relation".to_string())?;
+        .get(ident_values)
+        .ok_or(format!("Unexpected relation: {:?}", ident_values))?;
 
     Ok(output_ident_values
         .into_iter()
@@ -655,6 +655,39 @@ mod tests {
         output_ast: Vec<Statement>,
     }
 
+    fn split_by_line_and_trim_spaces(s: &str) -> Vec<String> {
+        let mut lines = s.split('\n').collect::<Vec<_>>();
+        if lines.first() == Some(&"") {
+            lines.remove(0);
+        }
+        if lines.last().map(|s| s.trim()) == Some(&"") {
+            lines.pop();
+        }
+
+        let baseline_preceding_space_count =
+            lines
+                .iter()
+                .filter(|s| !s.trim().is_empty())
+                .fold(50, |acc, s| {
+                    let current_space_count = s.chars().take_while(|c| c.is_whitespace()).count();
+
+                    if current_space_count < acc {
+                        current_space_count
+                    } else {
+                        acc
+                    }
+                });
+
+        lines
+            .iter()
+            .map(|s| {
+                s.strip_prefix(&' '.to_string().repeat(baseline_preceding_space_count))
+                    .unwrap_or(s)
+                    .to_string()
+            })
+            .collect()
+    }
+
     fn translate_sql(
         query: &str,
         names_to_replace: &ObjectNamesToReplace,
@@ -668,12 +701,7 @@ mod tests {
         object_name_replacer.traverse(&mut ast)?;
 
         Ok(Report {
-            original_query: query
-                .trim()
-                .split('\n')
-                .map(|s| s.trim_start_matches("            "))
-                .map(|s| s.to_string())
-                .collect(),
+            original_query: split_by_line_and_trim_spaces(query),
             names_to_replace: ObjectNamesToReplaceBTree {
                 indices_to_replace: names_to_replace
                     .indices_to_replace
@@ -698,104 +726,217 @@ mod tests {
         })
     }
 
-    #[test]
-    fn create_table() {
-        let sql = r#"
-            CREATE TABLE IF NOT EXISTS "~/books/things" (
-                "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
-                "externalLink" TEXT NOT NULL,
-                "externalLinkTitle" TEXT NOT NULL,
-                "id" TEXT PRIMARY KEY NOT NULL,
-                "imageUrl" TEXT NOT NULL,
-                "subtitle" TEXT NULL,
-                "title" TEXT NOT NULL
-            )
-        "#;
+    mod create_table {
+        use super::*;
 
-        let names_to_replace = ObjectNamesToReplace {
-            indices_to_replace: HashMap::new(),
-            relations_to_replace: HashMap::from_iter([(
-                vec!["~/books/things".to_string()],
-                vec!["my_books".to_string(), "tbl".to_string()],
-            )]),
-        };
-        let translate_result = translate_sql(sql, &names_to_replace);
-        insta::assert_yaml_snapshot!(translate_result);
-    }
+        #[test]
+        fn basic() {
+            let sql = r#"
+                CREATE TABLE IF NOT EXISTS "~/books/things" (
+                    "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
+                    "externalLink" TEXT NOT NULL,
+                    "externalLinkTitle" TEXT NOT NULL,
+                    "id" TEXT PRIMARY KEY NOT NULL,
+                    "imageUrl" TEXT NOT NULL,
+                    "subtitle" TEXT NULL,
+                    "title" TEXT NOT NULL
+                )
+            "#;
 
-    #[test]
-    fn create_table_using_parent() {
-        let sql = r#"
-            CREATE TABLE IF NOT EXISTS "~/books/bings/../things" (
-                "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
-                "externalLink" TEXT NOT NULL,
-                "externalLinkTitle" TEXT NOT NULL,
-                "id" TEXT PRIMARY KEY NOT NULL,
-                "imageUrl" TEXT NOT NULL,
-                "subtitle" TEXT NULL,
-                "title" TEXT NOT NULL
-            )
-        "#;
+            let names_to_replace = ObjectNamesToReplace {
+                indices_to_replace: HashMap::new(),
+                relations_to_replace: HashMap::from_iter([(
+                    vec!["~/books/things".to_string()],
+                    vec!["my_books".to_string(), "tbl".to_string()],
+                )]),
+            };
+            let translate_result = translate_sql(sql, &names_to_replace);
+            insta::assert_yaml_snapshot!(translate_result);
+        }
 
-        let names_to_replace = ObjectNamesToReplace {
-            indices_to_replace: HashMap::new(),
-            relations_to_replace: HashMap::from_iter([(
-                vec!["~/books/bings/../things".to_string()],
-                vec!["my_books".to_string()],
-            )]),
-        };
-        let translate_result = translate_sql(sql, &names_to_replace);
-        insta::assert_yaml_snapshot!(translate_result);
-    }
+        #[test]
+        fn using_parent() {
+            let sql = r#"
+                CREATE TABLE IF NOT EXISTS "~/books/bings/../things" (
+                    "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
+                    "externalLink" TEXT NOT NULL,
+                    "externalLinkTitle" TEXT NOT NULL,
+                    "id" TEXT PRIMARY KEY NOT NULL,
+                    "imageUrl" TEXT NOT NULL,
+                    "subtitle" TEXT NULL,
+                    "title" TEXT NOT NULL
+                )
+            "#;
 
-    #[test]
-    fn create_table_using_curdir() {
-        let sql = r#"
-            CREATE TABLE IF NOT EXISTS "~/books/./things/." (
-                "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
-                "externalLink" TEXT NOT NULL,
-                "externalLinkTitle" TEXT NOT NULL,
-                "id" TEXT PRIMARY KEY NOT NULL,
-                "imageUrl" TEXT NOT NULL,
-                "subtitle" TEXT NULL,
-                "title" TEXT NOT NULL
-            )
-        "#;
+            let names_to_replace = ObjectNamesToReplace {
+                indices_to_replace: HashMap::new(),
+                relations_to_replace: HashMap::from_iter([(
+                    vec!["~/books/bings/../things".to_string()],
+                    vec!["my_books".to_string()],
+                )]),
+            };
+            let translate_result = translate_sql(sql, &names_to_replace);
+            insta::assert_yaml_snapshot!(translate_result);
+        }
 
-        let names_to_replace = ObjectNamesToReplace {
-            indices_to_replace: HashMap::new(),
-            relations_to_replace: HashMap::from_iter([(
-                vec!["~/books/./things/.".to_string()],
-                vec!["my_books".to_string()],
-            )]),
-        };
-        let translate_result = translate_sql(sql, &names_to_replace);
-        insta::assert_yaml_snapshot!(translate_result);
-    }
+        #[test]
+        fn using_curdir() {
+            let sql = r#"
+                CREATE TABLE IF NOT EXISTS "~/books/./things/." (
+                    "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
+                    "externalLink" TEXT NOT NULL,
+                    "externalLinkTitle" TEXT NOT NULL,
+                    "id" TEXT PRIMARY KEY NOT NULL,
+                    "imageUrl" TEXT NOT NULL,
+                    "subtitle" TEXT NULL,
+                    "title" TEXT NOT NULL
+                )
+            "#;
 
-    #[test]
-    fn create_table_compound_identifier() {
-        let sql = r#"
-            CREATE TABLE IF NOT EXISTS x.y (
-                "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
-                "externalLink" TEXT NOT NULL,
-                "externalLinkTitle" TEXT NOT NULL,
-                "id" TEXT PRIMARY KEY NOT NULL,
-                "imageUrl" TEXT NOT NULL,
-                "subtitle" TEXT NULL,
-                "title" TEXT NOT NULL
-            )
-        "#;
+            let names_to_replace = ObjectNamesToReplace {
+                indices_to_replace: HashMap::new(),
+                relations_to_replace: HashMap::from_iter([(
+                    vec!["~/books/./things/.".to_string()],
+                    vec!["my_books".to_string()],
+                )]),
+            };
+            let translate_result = translate_sql(sql, &names_to_replace);
+            insta::assert_yaml_snapshot!(translate_result);
+        }
 
-        let names_to_replace = ObjectNamesToReplace {
-            indices_to_replace: HashMap::new(),
-            relations_to_replace: HashMap::from_iter([(
-                vec!["x".to_string(), "y".to_string()],
-                vec!["my_books".to_string()],
-            )]),
-        };
-        let translate_result = translate_sql(sql, &names_to_replace);
-        insta::assert_yaml_snapshot!(translate_result);
+        #[test]
+        fn compound_identifier() {
+            let sql = r#"
+                CREATE TABLE IF NOT EXISTS x.y (
+                    "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
+                    "externalLink" TEXT NOT NULL,
+                    "externalLinkTitle" TEXT NOT NULL,
+                    "id" TEXT PRIMARY KEY NOT NULL,
+                    "imageUrl" TEXT NOT NULL,
+                    "subtitle" TEXT NULL,
+                    "title" TEXT NOT NULL
+                )
+            "#;
+
+            let names_to_replace = ObjectNamesToReplace {
+                indices_to_replace: HashMap::new(),
+                relations_to_replace: HashMap::from_iter([(
+                    vec!["x".to_string(), "y".to_string()],
+                    vec!["my_books".to_string()],
+                )]),
+            };
+            let translate_result = translate_sql(sql, &names_to_replace);
+            insta::assert_yaml_snapshot!(translate_result);
+        }
+
+        #[test]
+        fn outside_home() {
+            let sql = r#"
+                CREATE TABLE IF NOT EXISTS "sasas" (
+                    "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
+                    "externalLink" TEXT NOT NULL,
+                    "externalLinkTitle" TEXT NOT NULL,
+                    "id" TEXT PRIMARY KEY NOT NULL,
+                    "imageUrl" TEXT NOT NULL,
+                    "subtitle" TEXT NULL,
+                    "title" TEXT NOT NULL
+                )
+            "#;
+
+            let names_to_replace = ObjectNamesToReplace {
+                indices_to_replace: HashMap::new(),
+                relations_to_replace: HashMap::from_iter([
+                    (vec!["sasas".to_string()], vec!["asasa".to_string()]),
+                    (vec!["asasa".to_string()], vec!["sasas".to_string()]),
+                ]),
+            };
+            let translate_result = translate_sql(sql, &names_to_replace);
+            insta::assert_yaml_snapshot!(translate_result);
+        }
+
+        #[test]
+        fn root() {
+            let sql = r#"
+                CREATE TABLE IF NOT EXISTS "/dev/null" (
+                    "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
+                    "externalLink" TEXT NOT NULL,
+                    "externalLinkTitle" TEXT NOT NULL,
+                    "id" TEXT PRIMARY KEY NOT NULL,
+                    "imageUrl" TEXT NOT NULL,
+                    "subtitle" TEXT NULL,
+                    "title" TEXT NOT NULL
+                )
+            "#;
+
+            let names_to_replace = ObjectNamesToReplace {
+                indices_to_replace: HashMap::new(),
+                relations_to_replace: HashMap::from_iter([(
+                    vec!["/dev/null".to_string()],
+                    vec!["dev_null".to_string()],
+                )]),
+            };
+            let translate_result = translate_sql(sql, &names_to_replace);
+            insta::assert_yaml_snapshot!(translate_result);
+        }
+
+        #[test]
+        fn outside_home_using_parent() {
+            let sql = r#"
+                CREATE TABLE IF NOT EXISTS "~/hi/../../etc/passwd" (
+                    "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
+                    "externalLink" TEXT NOT NULL,
+                    "externalLinkTitle" TEXT NOT NULL,
+                    "id" TEXT PRIMARY KEY NOT NULL,
+                    "imageUrl" TEXT NOT NULL,
+                    "subtitle" TEXT NULL,
+                    "title" TEXT NOT NULL
+                )
+            "#;
+
+            let names_to_replace = ObjectNamesToReplace {
+                indices_to_replace: HashMap::new(),
+                relations_to_replace: HashMap::from_iter([(
+                    vec!["~/hi/../../etc/passwd".to_string()],
+                    vec!["etc".to_string(), "passwd".to_string()],
+                )]),
+            };
+            let translate_result = translate_sql(sql, &names_to_replace);
+            insta::assert_yaml_snapshot!(translate_result);
+        }
+
+        #[test]
+        fn multiple() {
+            let sql = r#"
+                CREATE TABLE IF NOT EXISTS "~/books/things" (
+                    "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
+                    "externalLink" TEXT NOT NULL,
+                    "externalLinkTitle" TEXT NOT NULL,
+                    "id" TEXT PRIMARY KEY NOT NULL,
+                    "imageUrl" TEXT NOT NULL,
+                    "subtitle" TEXT NULL,
+                    "title" TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS "~/books/thongs" (
+                    "title" TEXT NOT NULL
+                );
+            "#;
+
+            let names_to_replace = ObjectNamesToReplace {
+                indices_to_replace: HashMap::new(),
+                relations_to_replace: HashMap::from_iter([
+                    (
+                        vec!["~/books/things".to_string()],
+                        vec!["my_books".to_string(), "tbl".to_string()],
+                    ),
+                    (
+                        vec!["~/books/thongs".to_string()],
+                        vec!["my_books2".to_string(), "tbl".to_string()],
+                    ),
+                ]),
+            };
+            let translate_result = translate_sql(sql, &names_to_replace);
+            insta::assert_yaml_snapshot!(translate_result);
+        }
     }
 
     #[test]
@@ -805,115 +946,6 @@ mod tests {
         let names_to_replace = ObjectNamesToReplace {
             indices_to_replace: HashMap::new(),
             relations_to_replace: HashMap::new(),
-        };
-        let translate_result = translate_sql(sql, &names_to_replace);
-        insta::assert_yaml_snapshot!(translate_result);
-    }
-
-    #[test]
-    fn create_table_outside_home() {
-        let sql = r#"
-            CREATE TABLE IF NOT EXISTS "sasas" (
-                "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
-                "externalLink" TEXT NOT NULL,
-                "externalLinkTitle" TEXT NOT NULL,
-                "id" TEXT PRIMARY KEY NOT NULL,
-                "imageUrl" TEXT NOT NULL,
-                "subtitle" TEXT NULL,
-                "title" TEXT NOT NULL
-            )
-        "#;
-
-        let names_to_replace = ObjectNamesToReplace {
-            indices_to_replace: HashMap::new(),
-            relations_to_replace: HashMap::from_iter([
-                (vec!["sasas".to_string()], vec!["asasa".to_string()]),
-                (vec!["asasa".to_string()], vec!["sasas".to_string()]),
-            ]),
-        };
-        let translate_result = translate_sql(sql, &names_to_replace);
-        insta::assert_yaml_snapshot!(translate_result);
-    }
-
-    #[test]
-    fn create_table_root() {
-        let sql = r#"
-            CREATE TABLE IF NOT EXISTS "/dev/null" (
-                "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
-                "externalLink" TEXT NOT NULL,
-                "externalLinkTitle" TEXT NOT NULL,
-                "id" TEXT PRIMARY KEY NOT NULL,
-                "imageUrl" TEXT NOT NULL,
-                "subtitle" TEXT NULL,
-                "title" TEXT NOT NULL
-            )
-        "#;
-
-        let names_to_replace = ObjectNamesToReplace {
-            indices_to_replace: HashMap::new(),
-            relations_to_replace: HashMap::from_iter([(
-                vec!["/dev/null".to_string()],
-                vec!["dev_null".to_string()],
-            )]),
-        };
-        let translate_result = translate_sql(sql, &names_to_replace);
-        insta::assert_yaml_snapshot!(translate_result);
-    }
-
-    #[test]
-    fn create_table_outside_home_using_parent() {
-        let sql = r#"
-            CREATE TABLE IF NOT EXISTS "~/hi/../../etc/passwd" (
-                "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
-                "externalLink" TEXT NOT NULL,
-                "externalLinkTitle" TEXT NOT NULL,
-                "id" TEXT PRIMARY KEY NOT NULL,
-                "imageUrl" TEXT NOT NULL,
-                "subtitle" TEXT NULL,
-                "title" TEXT NOT NULL
-            )
-        "#;
-
-        let names_to_replace = ObjectNamesToReplace {
-            indices_to_replace: HashMap::new(),
-            relations_to_replace: HashMap::from_iter([(
-                vec!["~/hi/../../etc/passwd".to_string()],
-                vec!["etc".to_string(), "passwd".to_string()],
-            )]),
-        };
-        let translate_result = translate_sql(sql, &names_to_replace);
-        insta::assert_yaml_snapshot!(translate_result);
-    }
-
-    #[test]
-    fn create_table_multiple() {
-        let sql = r#"
-            CREATE TABLE IF NOT EXISTS "~/books/things" (
-                "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
-                "externalLink" TEXT NOT NULL,
-                "externalLinkTitle" TEXT NOT NULL,
-                "id" TEXT PRIMARY KEY NOT NULL,
-                "imageUrl" TEXT NOT NULL,
-                "subtitle" TEXT NULL,
-                "title" TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS "~/books/thongs" (
-                "title" TEXT NOT NULL
-            );
-        "#;
-
-        let names_to_replace = ObjectNamesToReplace {
-            indices_to_replace: HashMap::new(),
-            relations_to_replace: HashMap::from_iter([
-                (
-                    vec!["~/books/things".to_string()],
-                    vec!["my_books".to_string(), "tbl".to_string()],
-                ),
-                (
-                    vec!["~/books/thongs".to_string()],
-                    vec!["my_books2".to_string(), "tbl".to_string()],
-                ),
-            ]),
         };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);
@@ -1342,19 +1374,38 @@ mod tests {
         insta::assert_yaml_snapshot!(translate_result);
     }
 
-    #[test]
-    fn drop_table() {
-        let sql = r#"drop table "~/heyy""#;
+    mod drop_table {
+        use super::*;
 
-        let names_to_replace = ObjectNamesToReplace {
-            indices_to_replace: HashMap::new(),
-            relations_to_replace: HashMap::from_iter([(
-                vec!["~/heyy".to_string()],
-                vec!["my_books".to_string(), "tbl".to_string()],
-            )]),
-        };
-        let translate_result = translate_sql(sql, &names_to_replace);
-        insta::assert_yaml_snapshot!(translate_result);
+        #[test]
+        fn replaced() {
+            let sql = r#"drop table "~/heyy""#;
+
+            let names_to_replace = ObjectNamesToReplace {
+                indices_to_replace: HashMap::new(),
+                relations_to_replace: HashMap::from_iter([(
+                    vec!["~/heyy".to_string()],
+                    vec!["my_books".to_string(), "tbl".to_string()],
+                )]),
+            };
+            let translate_result = translate_sql(sql, &names_to_replace);
+            insta::assert_yaml_snapshot!(translate_result);
+        }
+
+        #[test]
+        fn not_replaced() {
+            let sql = r#"drop table "~/beyy""#;
+
+            let names_to_replace = ObjectNamesToReplace {
+                indices_to_replace: HashMap::new(),
+                relations_to_replace: HashMap::from_iter([(
+                    vec!["~/heyy".to_string()],
+                    vec!["my_books".to_string(), "tbl".to_string()],
+                )]),
+            };
+            let translate_result = translate_sql(sql, &names_to_replace);
+            insta::assert_yaml_snapshot!(translate_result);
+        }
     }
 
     #[test]
@@ -1419,6 +1470,36 @@ mod tests {
                     vec!["non_books".to_string(), "tbl".to_string()],
                 ),
             ]),
+        };
+        let translate_result = translate_sql(sql, &names_to_replace);
+        insta::assert_yaml_snapshot!(translate_result);
+    }
+
+    #[test]
+    fn drop_role() {
+        let sql = r#"drop role "my-role""#;
+
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([(
+                vec!["my-role".to_string()],
+                vec!["your-role".to_string()],
+            )]),
+        };
+        let translate_result = translate_sql(sql, &names_to_replace);
+        insta::assert_yaml_snapshot!(translate_result);
+    }
+
+    #[test]
+    fn drop_schema() {
+        let sql = r#"drop schema "my-schema""#;
+
+        let names_to_replace = ObjectNamesToReplace {
+            indices_to_replace: HashMap::new(),
+            relations_to_replace: HashMap::from_iter([(
+                vec!["my-schema".to_string()],
+                vec!["your-schema".to_string()],
+            )]),
         };
         let translate_result = translate_sql(sql, &names_to_replace);
         insta::assert_yaml_snapshot!(translate_result);

@@ -1,0 +1,25 @@
+---
+source: src/object_name_replacer.rs
+expression: translate_result
+---
+Ok:
+  original_query:
+    - "drop schema \"my-schema\""
+  names_to_replace:
+    indices_to_replace: {}
+    relations_to_replace:
+      ? - my-schema
+      : - your-schema
+  output_query:
+    - "DROP SCHEMA \"my-schema\""
+  output_ast:
+    - Drop:
+        object_type: Schema
+        if_exists: false
+        names:
+          - - value: my-schema
+              quote_style: "\""
+        cascade: false
+        restrict: false
+        purge: false
+        temporary: false
