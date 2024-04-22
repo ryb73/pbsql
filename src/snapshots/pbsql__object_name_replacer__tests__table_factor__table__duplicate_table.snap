@@ -1,0 +1,5 @@
+---
+source: src/object_name_replacer.rs
+expression: translate_result
+---
+Err: "Duplicate table name: ~/books/things"

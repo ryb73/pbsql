@@ -1,0 +1,5 @@
+---
+source: src/path_convertor.rs
+expression: translate_result
+---
+Err: "Duplicate table alias: ~/books/things"

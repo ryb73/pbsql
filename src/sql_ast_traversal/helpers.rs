@@ -24,7 +24,7 @@ pub fn extract_binary_identifiers(
 ) -> Result<(String, String), String> {
     if identifiers.len() != 2 {
         return Err(format!(
-            "Expected 1 identifiers for the {} name, got: {:?}",
+            "Expected 2 identifiers for the {} name, got: {:?}",
             object_type,
             identifiers
                 .iter()

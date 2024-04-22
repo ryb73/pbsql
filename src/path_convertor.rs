@@ -1183,4 +1183,35 @@ mod tests {
         let translate_result = translate_sql(sql);
         insta::assert_yaml_snapshot!(translate_result);
     }
+
+    mod table_factor {
+        use super::*;
+        mod table {
+            use super::*;
+
+            #[test]
+            fn duplicate_table() {
+                let sql = r#"
+                    select "~/books/things".id, "~/books/things".title
+                    from "~/books/things"
+                    join "~/books/things"
+                "#;
+
+                let translate_result = translate_sql(sql);
+                insta::assert_yaml_snapshot!(translate_result);
+            }
+
+            #[test]
+            fn duplicate_alias() {
+                let sql = r#"
+                    select "~/books/things".id, "~/books/things".title
+                    from "~/books/things"
+                    join "~/books/non-things" as "~/books/things"
+                "#;
+
+                let translate_result = translate_sql(sql);
+                insta::assert_yaml_snapshot!(translate_result);
+            }
+        }
+    }
 }
