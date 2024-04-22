@@ -16,3 +16,6 @@ Cargo.lock
 # wasm-pack output
 pkg-bundler/
 pkg-nodejs/
+
+# Coverage info for VS Code gutters
+lcov.info

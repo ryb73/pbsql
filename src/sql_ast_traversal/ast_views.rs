@@ -409,3 +409,798 @@ impl<'a> TryFrom<&'a mut TableFactor> for TableFactorTableViewMut<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod drop {
+        use super::*;
+
+        mod try_from {
+            use sqlparser::ast::CloseCursor;
+
+            use super::*;
+
+            #[test]
+            fn good() {
+                let mut statement = Statement::Drop {
+                    cascade: true,
+                    if_exists: true,
+                    names: vec![ObjectName(vec![Ident::new("table")])],
+                    object_type: ObjectType::Table,
+                    purge: true,
+                    restrict: true,
+                    temporary: true,
+                };
+
+                let view = DropStatementViewMutable::try_from(&mut statement);
+                insta::assert_debug_snapshot!(view, @r###"
+                Ok(
+                    DropStatementViewMutable {
+                        cascade: true,
+                        if_exists: true,
+                        names: [
+                            ObjectName(
+                                [
+                                    Ident {
+                                        value: "table",
+                                        quote_style: None,
+                                    },
+                                ],
+                            ),
+                        ],
+                        object_type: Table,
+                        purge: true,
+                        restrict: true,
+                        temporary: true,
+                    },
+                )
+                "###);
+            }
+
+            #[test]
+            fn bad() {
+                let mut statement = Statement::Close {
+                    cursor: CloseCursor::All,
+                };
+
+                let view = DropStatementViewMutable::try_from(&mut statement);
+                insta::assert_debug_snapshot!(view, @r###"
+                Err(
+                    "Expected a Drop statement",
+                )
+                "###);
+            }
+        }
+    }
+
+    mod update {
+        use super::*;
+
+        mod try_from {
+            use sqlparser::ast::{CloseCursor, Value};
+
+            use super::*;
+
+            #[test]
+            fn good() {
+                let mut statement = Statement::Update {
+                    assignments: vec![Assignment {
+                        id: vec![Ident::new("id")],
+                        value: Expr::Value(Value::SingleQuotedString("1".to_string())),
+                    }],
+                    from: None,
+                    returning: None,
+                    selection: None,
+                    table: TableWithJoins {
+                        joins: vec![],
+                        relation: TableFactor::Table {
+                            alias: None,
+                            args: None,
+                            name: ObjectName(vec![Ident::new("table")]),
+                            partitions: vec![],
+                            version: None,
+                            with_hints: vec![],
+                        },
+                    },
+                };
+
+                let view = UpdateStatementViewMutable::try_from(&mut statement);
+                insta::assert_debug_snapshot!(view, @r###"
+                Ok(
+                    UpdateStatementViewMutable {
+                        assignments: [
+                            Assignment {
+                                id: [
+                                    Ident {
+                                        value: "id",
+                                        quote_style: None,
+                                    },
+                                ],
+                                value: Value(
+                                    SingleQuotedString(
+                                        "1",
+                                    ),
+                                ),
+                            },
+                        ],
+                        from: None,
+                        returning: None,
+                        selection: None,
+                        table: TableWithJoins {
+                            relation: Table {
+                                name: ObjectName(
+                                    [
+                                        Ident {
+                                            value: "table",
+                                            quote_style: None,
+                                        },
+                                    ],
+                                ),
+                                alias: None,
+                                args: None,
+                                with_hints: [],
+                                version: None,
+                                partitions: [],
+                            },
+                            joins: [],
+                        },
+                    },
+                )
+                "###);
+            }
+
+            #[test]
+            fn bad() {
+                let mut statement = Statement::Close {
+                    cursor: CloseCursor::All,
+                };
+
+                let view = UpdateStatementViewMutable::try_from(&mut statement);
+                insta::assert_debug_snapshot!(view, @r###"
+                Err(
+                    "Expected an Update statement",
+                )
+                "###);
+            }
+        }
+    }
+
+    mod create_index {
+        use super::*;
+
+        mod try_from {
+            use sqlparser::ast::{CloseCursor, Value};
+
+            use super::*;
+
+            #[test]
+            fn good() {
+                let mut statement = Statement::CreateIndex {
+                    columns: vec![OrderByExpr {
+                        expr: Expr::Value(Value::SingleQuotedString("id".to_string())),
+                        asc: None,
+                        nulls_first: None,
+                    }],
+                    name: Some(ObjectName(vec![Ident::new("index")])),
+                    table_name: ObjectName(vec![Ident::new("table")]),
+                    unique: true,
+                    if_not_exists: true,
+                    nulls_distinct: None,
+                    concurrently: true,
+                    include: vec![Ident::new("id")],
+                    predicate: None,
+                    using: None,
+                };
+
+                let view = CreateIndexStatementViewMutable::try_from(&mut statement);
+                insta::assert_debug_snapshot!(view, @r###"
+                Ok(
+                    CreateIndexStatementViewMutable {
+                        columns: [
+                            OrderByExpr {
+                                expr: Value(
+                                    SingleQuotedString(
+                                        "id",
+                                    ),
+                                ),
+                                asc: None,
+                                nulls_first: None,
+                            },
+                        ],
+                        name: Some(
+                            ObjectName(
+                                [
+                                    Ident {
+                                        value: "index",
+                                        quote_style: None,
+                                    },
+                                ],
+                            ),
+                        ),
+                        table_name: ObjectName(
+                            [
+                                Ident {
+                                    value: "table",
+                                    quote_style: None,
+                                },
+                            ],
+                        ),
+                        unique: true,
+                        if_not_exists: true,
+                        nulls_distinct: None,
+                        concurrently: true,
+                        include: [
+                            Ident {
+                                value: "id",
+                                quote_style: None,
+                            },
+                        ],
+                        predicate: None,
+                        using: None,
+                    },
+                )
+                "###);
+            }
+
+            #[test]
+            fn bad() {
+                let mut statement = Statement::Close {
+                    cursor: CloseCursor::All,
+                };
+
+                let view = CreateIndexStatementViewMutable::try_from(&mut statement);
+                insta::assert_debug_snapshot!(view, @r###"
+                Err(
+                    "Expected a CreateIndex statement",
+                )
+                "###);
+            }
+        }
+    }
+
+    mod create_table {
+        use super::*;
+
+        mod try_from {
+            use sqlparser::ast::CloseCursor;
+
+            use super::*;
+
+            #[test]
+            fn good() {
+                let mut statement = Statement::CreateTable {
+                    if_not_exists: true,
+                    name: ObjectName(vec![Ident::new("table")]),
+                    columns: vec![ColumnDef {
+                        name: Ident::new("id"),
+                        data_type: sqlparser::ast::DataType::Int(None),
+                        collation: None,
+                        options: vec![],
+                    }],
+                    auto_increment_offset: None,
+                    clone: None,
+                    cluster_by: None,
+                    collation: None,
+                    comment: None,
+                    constraints: vec![],
+                    default_charset: None,
+                    engine: None,
+                    external: false,
+                    file_format: None,
+                    global: None,
+                    hive_distribution: HiveDistributionStyle::NONE,
+                    hive_formats: None,
+                    like: None,
+                    location: None,
+                    on_cluster: None,
+                    on_commit: None,
+                    options: None,
+                    or_replace: false,
+                    order_by: None,
+                    partition_by: None,
+                    query: None,
+                    strict: false,
+                    table_properties: vec![],
+                    temporary: false,
+                    transient: false,
+                    with_options: vec![],
+                    without_rowid: false,
+                };
+
+                let view = CreateTableStatementViewMutable::try_from(&mut statement);
+                insta::assert_debug_snapshot!(view, @r###"
+                Ok(
+                    CreateTableStatementViewMutable {
+                        if_not_exists: true,
+                        name: ObjectName(
+                            [
+                                Ident {
+                                    value: "table",
+                                    quote_style: None,
+                                },
+                            ],
+                        ),
+                        columns: [
+                            ColumnDef {
+                                name: Ident {
+                                    value: "id",
+                                    quote_style: None,
+                                },
+                                data_type: Int(
+                                    None,
+                                ),
+                                collation: None,
+                                options: [],
+                            },
+                        ],
+                        auto_increment_offset: None,
+                        clone: None,
+                        cluster_by: None,
+                        collation: None,
+                        comment: None,
+                        constraints: [],
+                        default_charset: None,
+                        engine: None,
+                        external: false,
+                        file_format: None,
+                        global: None,
+                        hive_distribution: NONE,
+                        hive_formats: None,
+                        like: None,
+                        location: None,
+                        on_cluster: None,
+                        on_commit: None,
+                        options: None,
+                        or_replace: false,
+                        order_by: None,
+                        partition_by: None,
+                        query: None,
+                        strict: false,
+                        table_properties: [],
+                        temporary: false,
+                        transient: false,
+                        with_options: [],
+                        without_rowid: false,
+                    },
+                )
+                "###);
+            }
+
+            #[test]
+            fn bad() {
+                let mut statement = Statement::Close {
+                    cursor: CloseCursor::All,
+                };
+
+                let view = CreateTableStatementViewMutable::try_from(&mut statement);
+                insta::assert_debug_snapshot!(view, @r###"
+                Err(
+                    "Expected a CreateTable statement",
+                )
+                "###);
+            }
+        }
+    }
+
+    mod insert {
+        use super::*;
+
+        mod try_from {
+            use sqlparser::ast::CloseCursor;
+
+            use super::*;
+
+            #[test]
+            fn good() {
+                let mut statement = Statement::Insert {
+                    after_columns: vec![Ident::new("id")],
+                    columns: vec![Ident::new("id")],
+                    ignore: false,
+                    into: true,
+                    on: None,
+                    or: None,
+                    overwrite: false,
+                    partitioned: None,
+                    priority: None,
+                    replace_into: false,
+                    returning: None,
+                    source: None,
+                    table_alias: None,
+                    table_name: ObjectName(vec![Ident::new("table")]),
+                    table: false,
+                };
+
+                let view = InsertStatementViewMutable::try_from(&mut statement);
+                insta::assert_debug_snapshot!(view, @r###"
+                Ok(
+                    InsertStatementViewMutable {
+                        after_columns: [
+                            Ident {
+                                value: "id",
+                                quote_style: None,
+                            },
+                        ],
+                        columns: [
+                            Ident {
+                                value: "id",
+                                quote_style: None,
+                            },
+                        ],
+                        ignore: false,
+                        into: true,
+                        on: None,
+                        or: None,
+                        overwrite: false,
+                        partitioned: None,
+                        priority: None,
+                        replace_into: false,
+                        returning: None,
+                        source: None,
+                        table_alias: None,
+                        table_name: ObjectName(
+                            [
+                                Ident {
+                                    value: "table",
+                                    quote_style: None,
+                                },
+                            ],
+                        ),
+                        table: false,
+                    },
+                )
+                "###);
+            }
+
+            #[test]
+            fn bad() {
+                let mut statement = Statement::Close {
+                    cursor: CloseCursor::All,
+                };
+
+                let view = InsertStatementViewMutable::try_from(&mut statement);
+                insta::assert_debug_snapshot!(view, @r###"
+                Err(
+                    "Expected an Insert statement",
+                )
+                "###);
+            }
+        }
+    }
+
+    mod set_operation {
+        use super::*;
+
+        mod try_from {
+            use sqlparser::ast::{GroupByExpr, Select, Values};
+
+            use super::*;
+
+            #[test]
+            fn good() {
+                let mut set_expr = SetExpr::SetOperation {
+                    left: Box::new(SetExpr::Select(Box::new(Select {
+                        distinct: None,
+                        top: None,
+                        projection: vec![],
+                        into: None,
+                        from: vec![],
+                        lateral_views: vec![],
+                        selection: None,
+                        group_by: GroupByExpr::Expressions(vec![]),
+                        cluster_by: vec![],
+                        distribute_by: vec![],
+                        sort_by: vec![],
+                        having: None,
+                        named_window: vec![],
+                        qualify: None,
+                    }))),
+                    op: SetOperator::Union,
+                    right: Box::new(SetExpr::Select(Box::new(Select {
+                        distinct: None,
+                        top: None,
+                        projection: vec![],
+                        into: None,
+                        from: vec![],
+                        lateral_views: vec![],
+                        selection: None,
+                        group_by: GroupByExpr::Expressions(vec![]),
+                        cluster_by: vec![],
+                        distribute_by: vec![],
+                        sort_by: vec![],
+                        having: None,
+                        named_window: vec![],
+                        qualify: None,
+                    }))),
+                    set_quantifier: SetQuantifier::Distinct,
+                };
+
+                let view = SetOperationViewMutable::try_from(&mut set_expr);
+                insta::assert_debug_snapshot!(view, @r###"
+                Ok(
+                    SetOperationViewMutable {
+                        left: Select(
+                            Select {
+                                distinct: None,
+                                top: None,
+                                projection: [],
+                                into: None,
+                                from: [],
+                                lateral_views: [],
+                                selection: None,
+                                group_by: Expressions(
+                                    [],
+                                ),
+                                cluster_by: [],
+                                distribute_by: [],
+                                sort_by: [],
+                                having: None,
+                                named_window: [],
+                                qualify: None,
+                            },
+                        ),
+                        op: Union,
+                        right: Select(
+                            Select {
+                                distinct: None,
+                                top: None,
+                                projection: [],
+                                into: None,
+                                from: [],
+                                lateral_views: [],
+                                selection: None,
+                                group_by: Expressions(
+                                    [],
+                                ),
+                                cluster_by: [],
+                                distribute_by: [],
+                                sort_by: [],
+                                having: None,
+                                named_window: [],
+                                qualify: None,
+                            },
+                        ),
+                        set_quantifier: Distinct,
+                    },
+                )
+                "###);
+            }
+
+            #[test]
+            fn bad() {
+                let mut set_expr = SetExpr::Values(Values {
+                    explicit_row: false,
+                    rows: vec![],
+                });
+
+                let view = SetOperationViewMutable::try_from(&mut set_expr);
+                insta::assert_debug_snapshot!(view, @r###"
+                Err(
+                    "Expected a SetOperation",
+                )
+                "###);
+            }
+        }
+    }
+
+    mod in_subquery_expr {
+        use super::*;
+
+        mod try_from {
+            use super::*;
+
+            #[test]
+            fn good() {
+                let mut expr = Expr::InSubquery {
+                    expr: Box::new(Expr::Value(sqlparser::ast::Value::SingleQuotedString(
+                        "id".to_string(),
+                    ))),
+                    negated: false,
+                    subquery: Box::new(Query {
+                        body: Box::new(SetExpr::Values(sqlparser::ast::Values {
+                            explicit_row: false,
+                            rows: vec![],
+                        })),
+                        fetch: None,
+                        for_clause: None,
+                        limit_by: vec![],
+                        limit: None,
+                        locks: vec![],
+                        offset: None,
+                        order_by: vec![],
+                        with: None,
+                    }),
+                };
+
+                let view = InSubqueryExprViewMutable::try_from(&mut expr);
+                insta::assert_debug_snapshot!(view, @r###"
+                Ok(
+                    InSubqueryExprViewMutable {
+                        expr: Value(
+                            SingleQuotedString(
+                                "id",
+                            ),
+                        ),
+                        negated: false,
+                        subquery: Query {
+                            with: None,
+                            body: Values(
+                                Values {
+                                    explicit_row: false,
+                                    rows: [],
+                                },
+                            ),
+                            order_by: [],
+                            limit: None,
+                            limit_by: [],
+                            offset: None,
+                            fetch: None,
+                            locks: [],
+                            for_clause: None,
+                        },
+                    },
+                )
+                "###);
+            }
+
+            #[test]
+            fn bad() {
+                let mut expr =
+                    Expr::Value(sqlparser::ast::Value::SingleQuotedString("id".to_string()));
+
+                let view = InSubqueryExprViewMutable::try_from(&mut expr);
+                insta::assert_debug_snapshot!(view, @r###"
+                Err(
+                    "Expected an InSubquery expression",
+                )
+                "###);
+            }
+        }
+    }
+
+    mod table_factor_derived {
+        use super::*;
+
+        mod try_from {
+            use super::*;
+
+            #[test]
+            fn good() {
+                let mut table_factor = TableFactor::Derived {
+                    alias: None,
+                    lateral: false,
+                    subquery: Box::new(Query {
+                        body: Box::new(SetExpr::Values(sqlparser::ast::Values {
+                            explicit_row: false,
+                            rows: vec![],
+                        })),
+                        fetch: None,
+                        for_clause: None,
+                        limit_by: vec![],
+                        limit: None,
+                        locks: vec![],
+                        offset: None,
+                        order_by: vec![],
+                        with: None,
+                    }),
+                };
+
+                let view = TableFactorDerivedViewMut::try_from(&mut table_factor);
+                insta::assert_debug_snapshot!(view, @r###"
+                Ok(
+                    TableFactorDerivedViewMut {
+                        alias: None,
+                        lateral: false,
+                        subquery: Query {
+                            with: None,
+                            body: Values(
+                                Values {
+                                    explicit_row: false,
+                                    rows: [],
+                                },
+                            ),
+                            order_by: [],
+                            limit: None,
+                            limit_by: [],
+                            offset: None,
+                            fetch: None,
+                            locks: [],
+                            for_clause: None,
+                        },
+                    },
+                )
+                "###);
+            }
+
+            #[test]
+            fn bad() {
+                let mut table_factor = TableFactor::Table {
+                    alias: None,
+                    args: None,
+                    name: ObjectName(vec![Ident::new("table")]),
+                    partitions: vec![],
+                    version: None,
+                    with_hints: vec![],
+                };
+
+                let view = TableFactorDerivedViewMut::try_from(&mut table_factor);
+                insta::assert_debug_snapshot!(view, @r###"
+                Err(
+                    "Expected a DerivedTableFactor",
+                )
+                "###);
+            }
+        }
+    }
+
+    mod table_factor_table {
+        use super::*;
+
+        mod try_from {
+            use super::*;
+
+            #[test]
+            fn good() {
+                let mut table_factor = TableFactor::Table {
+                    alias: None,
+                    args: None,
+                    name: ObjectName(vec![Ident::new("table")]),
+                    partitions: vec![],
+                    version: None,
+                    with_hints: vec![],
+                };
+
+                let view = TableFactorTableViewMut::try_from(&mut table_factor);
+                insta::assert_debug_snapshot!(view, @r###"
+                Ok(
+                    TableFactorTableViewMut {
+                        alias: None,
+                        args: None,
+                        name: ObjectName(
+                            [
+                                Ident {
+                                    value: "table",
+                                    quote_style: None,
+                                },
+                            ],
+                        ),
+                        partitions: [],
+                        version: None,
+                        with_hints: [],
+                    },
+                )
+                "###);
+            }
+
+            #[test]
+            fn bad() {
+                let mut table_factor = TableFactor::Derived {
+                    alias: None,
+                    lateral: false,
+                    subquery: Box::new(Query {
+                        body: Box::new(SetExpr::Values(sqlparser::ast::Values {
+                            explicit_row: false,
+                            rows: vec![],
+                        })),
+                        fetch: None,
+                        for_clause: None,
+                        limit_by: vec![],
+                        limit: None,
+                        locks: vec![],
+                        offset: None,
+                        order_by: vec![],
+                        with: None,
+                    }),
+                };
+
+                let view = TableFactorTableViewMut::try_from(&mut table_factor);
+                insta::assert_debug_snapshot!(view, @r###"
+                Err(
+                    "Expected a TableFactor",
+                )
+                "###);
+            }
+        }
+    }
+}
