@@ -1,0 +1,27 @@
+---
+source: src/tql_validator.rs
+expression: "(translate_result, split_by_line_and_trim_spaces(sql))"
+---
+- Ok: ~
+- - "select \"id\""
+  - from (
+  - "    select"
+  - "        \"~/books/things\".\"id\" as \"id\","
+  - "        0 as \"num_matches\" from \"~/books/things\""
+  - "    left join \"~/books/matches\" on ("
+  - "        \"~/books/matches\".\"winner_id\" = \"~/books/things\".\"id\""
+  - "        or \"~/books/matches\".\"loser_id\" = \"~/books/things\".\"id\""
+  - "    )"
+  - "    where \"~/books/matches\".\"loser_id\" is null"
+  - ""
+  - "    union all"
+  - ""
+  - "    select \"winner_id\" as \"id\", 1 as \"num_matches\" from \"~/books/matches\""
+  - ""
+  - "    union all"
+  - ""
+  - "    select \"loser_id\" as \"id\", 1 as \"num_matches\" from \"~/books/matches\""
+  - ") as \"sq\""
+  - "group by \"id\""
+  - "order by sum(\"num_matches\")"
+  - limit ?

@@ -1,0 +1,7 @@
+---
+source: src/tql_validator.rs
+expression: "(translate_result, split_by_line_and_trim_spaces(sql))"
+---
+- Ok: ~
+- - "INSERT INTO \"~/books/matches\" (\"id\", \"loserId\", \"winnerId\", \"matchDate\")"
+  - "SELECT \"~/books/matches\".\"id\" || '2', \"loserId\", \"~/books/matches\".\"winnerId\", \"matchDate\" FROM \"~/books/matches\""

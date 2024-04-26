@@ -1,0 +1,14 @@
+---
+source: src/tql_validator.rs
+expression: "(translate_result, split_by_line_and_trim_spaces(sql))"
+---
+- Ok: ~
+- - SELECT
+  - "    loserId, winnerId"
+  - "FROM \"~/books/matches\""
+  - WHERE loserId IN (
+  - "    SELECT thingId"
+  - "    FROM \"~/books/eloScores\""
+  - "    ORDER BY score DESC, thingId DESC"
+  - "    LIMIT 15"
+  - )

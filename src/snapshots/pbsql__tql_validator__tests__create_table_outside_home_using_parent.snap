@@ -1,0 +1,14 @@
+---
+source: src/tql_validator.rs
+expression: "(translate_result, split_by_line_and_trim_spaces(sql))"
+---
+- Ok: ~
+- - "CREATE TABLE IF NOT EXISTS \"~/hi/../../etc/passwd\" ("
+  - "    \"excluded\" BOOLEAN NOT NULL DEFAULT FALSE,"
+  - "    \"externalLink\" TEXT NOT NULL,"
+  - "    \"externalLinkTitle\" TEXT NOT NULL,"
+  - "    \"id\" TEXT PRIMARY KEY NOT NULL,"
+  - "    \"imageUrl\" TEXT NOT NULL,"
+  - "    \"subtitle\" TEXT NULL,"
+  - "    \"title\" TEXT NOT NULL"
+  - )

@@ -1,0 +1,6 @@
+---
+source: src/tql_validator.rs
+expression: "(translate_result, split_by_line_and_trim_spaces(sql))"
+---
+- Err: "not implemented: Statement::Close"
+- - close my_eyes;

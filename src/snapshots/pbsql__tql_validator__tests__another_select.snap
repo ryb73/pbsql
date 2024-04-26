@@ -1,0 +1,22 @@
+---
+source: src/tql_validator.rs
+expression: "(translate_result, split_by_line_and_trim_spaces(sql))"
+---
+- Ok: ~
+- - SELECT
+  - "    COUNT(*) AS \"rank0\""
+  - "FROM \"~/books/eloScores\" AS \"eloScores\""
+  - "JOIN \"~/books/eloScores\" AS \"comparisonScore\""
+  - "    ON eloScores.thingId = ?"
+  - "JOIN \"~/books/things\" AS \"books\""
+  - "    ON books.id = eloScores.thingId"
+  - WHERE
+  - "    books.excluded = ?"
+  - "    AND ("
+  - "        eloScores.score > comparisonScore.score"
+  - "        OR ("
+  - "            eloScores.score = comparisonScore.score"
+  - "            AND eloScores.thingId > comparisonScore.thingId"
+  - "        )"
+  - "    )"
+  - LIMIT ? OFFSET ?

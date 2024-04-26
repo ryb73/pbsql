@@ -1,0 +1,5 @@
+---
+source: src/tql_validator.rs
+expression: result
+---
+Err: "Unsupported function: badfunc"

@@ -1,0 +1,8 @@
+---
+source: src/tql_validator.rs
+expression: "(translate_result, split_by_line_and_trim_spaces(sql))"
+---
+- Ok: ~
+- - "select \"~/books/things\".id, \"~/books/things\".title"
+  - "from \"~/books/things\""
+  - "join \"~/books/things\""

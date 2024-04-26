@@ -1,0 +1,12 @@
+---
+source: src/tql_validator.rs
+expression: "(translate_result, split_by_line_and_trim_spaces(sql))"
+---
+- Ok: ~
+- - SELECT
+  - "    winner.score AS \"winnerScore\", loser.score AS \"loserScore\""
+  - "FROM \"~/books/eloScores\" AS \"winner\""
+  - "INNER JOIN \"~/books/eloScores\" AS \"loser\""
+  - WHERE
+  - "    winner.thing_id = ?"
+  - "    AND loser.thing_id = ?"

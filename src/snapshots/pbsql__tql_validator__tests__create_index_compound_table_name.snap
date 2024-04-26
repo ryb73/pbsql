@@ -1,0 +1,6 @@
+---
+source: src/tql_validator.rs
+expression: "(translate_result, split_by_line_and_trim_spaces(sql))"
+---
+- Err: "Expected 1 identifiers for the table name, got: [\"x\", \"y\"]"
+- - CREATE INDEX a ON x.y (score)

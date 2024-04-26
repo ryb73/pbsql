@@ -1,7 +1,9 @@
+mod common;
 mod object_name_replacer;
 mod path_convertor;
 mod reference_extractor;
 mod sql_ast_traversal;
+mod tql_validator;
 
 use object_name_replacer::{ObjectNameReplacer, ObjectNamesToReplace};
 use path_convertor::DatabaseNamesByPath;
@@ -10,6 +12,7 @@ use serde::Serialize;
 use sql_ast_traversal::{helpers::extract_unary_identifier, traverser::SqlAstTraverser};
 use sqlparser::{ast::ObjectName, dialect::SQLiteDialect, parser::Parser};
 use std::collections::{BTreeMap, HashMap, HashSet};
+use tql_validator::TqlValidator;
 use typed_path::Utf8UnixPathBuf;
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 
@@ -56,6 +59,9 @@ fn translate_sql(query: &str) -> Result<TranslatedQuery<Vec<String>>, String> {
     let dialect = SQLiteDialect {};
 
     let mut ast = Parser::parse_sql(&dialect, query).map_err(|e| e.to_string())?;
+
+    let mut validator = TqlValidator::new();
+    validator.traverse(&mut ast)?;
 
     let mut extractor = ReferenceExtractor::new();
     extractor.traverse(&mut ast)?;
@@ -388,7 +394,7 @@ mod tests {
         if let Err(err) = translate_result {
             assert_eq!(
                 err,
-                "Expected 1 identifiers for the relation name, got: [\"x\", \"y\"]"
+                "Expected 1 identifiers for the table name, got: [\"x\", \"y\"]"
             );
         } else {
             panic!("Expected error, got: {:?}", translate_result);
@@ -639,7 +645,7 @@ mod tests {
         if let Err(err) = translate_result {
             assert_eq!(
                 err,
-                "Expected 1 identifiers for the relation name, got: [\"x\", \"y\"]"
+                "Expected 1 identifiers for the table name, got: [\"x\", \"y\"]"
             );
         } else {
             panic!("Expected error, got: {:?}", translate_result);

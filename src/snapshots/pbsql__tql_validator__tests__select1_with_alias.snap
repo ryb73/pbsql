@@ -1,0 +1,11 @@
+---
+source: src/tql_validator.rs
+expression: "(translate_result, split_by_line_and_trim_spaces(sql))"
+---
+- Ok: ~
+- - SELECT
+  - "    things.id, things.title, things.subtitle, things.image_url, things.external_link,"
+  - "    things.external_link_title, things.excluded"
+  - "FROM \"~/books/things\" AS \"things\""
+  - WHERE things.id = ?
+  - LIMIT 1

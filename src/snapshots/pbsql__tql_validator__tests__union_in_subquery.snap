@@ -1,0 +1,30 @@
+---
+source: src/tql_validator.rs
+expression: "(translate_result, split_by_line_and_trim_spaces(sql))"
+---
+- Ok: ~
+- - SELECT
+  - "    sq.id, sq.num_matches"
+  - FROM (
+  - "    SELECT books.id, 0 AS \"num_matches\""
+  - "    FROM \"~/books/things\" AS \"books\""
+  - "    LEFT JOIN \"~/books/matches\" AS \"matches\""
+  - "    ON ("
+  - "        books.id = matches.winner_id"
+  - "        OR books.id = matches.loser_id"
+  - "    )"
+  - "    WHERE matches.loser_id IS NULL"
+  - ""
+  - "    UNION ALL"
+  - ""
+  - "    SELECT winner_id AS \"id\", 1 AS \"num_matches\""
+  - "    FROM \"~/books/matches\""
+  - ""
+  - "    UNION ALL"
+  - ""
+  - "    SELECT loser_id AS \"id\", 1 AS \"num_matches\""
+  - "    FROM \"~/books/matches\""
+  - ") AS \"sq\""
+  - GROUP BY sq.id
+  - ORDER BY sum(sq.num_matches) ASC
+  - LIMIT ?

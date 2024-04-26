@@ -631,10 +631,10 @@ fn get_replacement_identifiers_for_table<'a>(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-
+    use crate::common::split_by_line_and_trim_spaces;
     use sqlformat::FormatOptions;
     use sqlparser::{ast::Statement, dialect::SQLiteDialect, parser::Parser};
+    use std::collections::BTreeMap;
 
     use super::*;
 
@@ -650,39 +650,6 @@ mod tests {
         names_to_replace: ObjectNamesToReplaceBTree,
         output_query: Vec<String>,
         output_ast: Vec<Statement>,
-    }
-
-    fn split_by_line_and_trim_spaces(s: &str) -> Vec<String> {
-        let mut lines = s.split('\n').collect::<Vec<_>>();
-        if lines.first() == Some(&"") {
-            lines.remove(0);
-        }
-        if lines.last().map(|s| s.trim()) == Some(&"") {
-            lines.pop();
-        }
-
-        let baseline_preceding_space_count =
-            lines
-                .iter()
-                .filter(|s| !s.trim().is_empty())
-                .fold(50, |acc, s| {
-                    let current_space_count = s.chars().take_while(|c| c.is_whitespace()).count();
-
-                    if current_space_count < acc {
-                        current_space_count
-                    } else {
-                        acc
-                    }
-                });
-
-        lines
-            .iter()
-            .map(|s| {
-                s.strip_prefix(&' '.to_string().repeat(baseline_preceding_space_count))
-                    .unwrap_or(s)
-                    .to_string()
-            })
-            .collect()
     }
 
     fn translate_sql(
