@@ -1,0 +1,11 @@
+---
+source: src/lib.rs
+expression: report
+---
+database_names: {}
+translated_query:
+  Ok:
+    - - SELECT
+      - "  NULL"
+original_query:
+  - SELECT null

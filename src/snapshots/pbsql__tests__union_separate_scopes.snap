@@ -1,0 +1,28 @@
+---
+source: src/lib.rs
+expression: report
+---
+database_names:
+  ~/books/non-things: main
+  ~/books/things: db1
+translated_query:
+  Ok:
+    - - SELECT
+      - "  \"~/books/things\".id,"
+      - "  \"~/books/things\".title"
+      - FROM
+      - "  main.table_contents AS \"~/books/things\""
+      - UNION
+      - SELECT
+      - "  db1.table_contents.id,"
+      - "  db1.table_contents.title"
+      - FROM
+      - "  db1.table_contents"
+original_query:
+  - "select \"~/books/things\".id, \"~/books/things\".title"
+  - "from \"~/books/non-things\" as \"~/books/things\""
+  - ""
+  - union
+  - ""
+  - "select \"~/books/things\".id, \"~/books/things\".title"
+  - "from \"~/books/things\""

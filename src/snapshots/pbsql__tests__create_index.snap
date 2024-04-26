@@ -1,0 +1,11 @@
+---
+source: src/lib.rs
+expression: report
+---
+database_names:
+  ~/books/eloScores: main
+translated_query:
+  Ok:
+    - - CREATE INDEX main.tbl_scoreIndex ON table_contents(score)
+original_query:
+  - "CREATE INDEX \"scoreIndex\" ON \"~/books/eloScores\" (score)"

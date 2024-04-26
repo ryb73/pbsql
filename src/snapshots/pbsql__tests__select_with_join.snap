@@ -1,0 +1,25 @@
+---
+source: src/lib.rs
+expression: report
+---
+database_names:
+  ~/books/eloScores: main
+translated_query:
+  Ok:
+    - - SELECT
+      - "  \"winner\".score AS \"winnerScore\","
+      - "  \"loser\".score AS \"loserScore\""
+      - FROM
+      - "  main.table_contents AS \"winner\""
+      - "  JOIN main.table_contents AS \"loser\""
+      - WHERE
+      - "  \"winner\".thing_id = ?"
+      - "  AND \"loser\".thing_id = ?"
+original_query:
+  - SELECT
+  - "    winner.score AS \"winnerScore\", loser.score AS \"loserScore\""
+  - "FROM \"~/books/eloScores\" AS \"winner\""
+  - "INNER JOIN \"~/books/eloScores\" AS \"loser\""
+  - WHERE
+  - "    winner.thing_id = ?"
+  - "    AND loser.thing_id = ?"

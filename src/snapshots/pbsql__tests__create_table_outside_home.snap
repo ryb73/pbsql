@@ -1,0 +1,27 @@
+---
+source: src/lib.rs
+expression: report
+---
+database_names:
+  sasas: main
+translated_query:
+  Ok:
+    - - CREATE TABLE IF NOT EXISTS main.table_contents (
+      - "  \"excluded\" BOOLEAN NOT NULL DEFAULT false,"
+      - "  \"externalLink\" TEXT NOT NULL,"
+      - "  \"externalLinkTitle\" TEXT NOT NULL,"
+      - "  \"id\" TEXT PRIMARY KEY NOT NULL,"
+      - "  \"imageUrl\" TEXT NOT NULL,"
+      - "  \"subtitle\" TEXT NULL,"
+      - "  \"title\" TEXT NOT NULL"
+      - )
+original_query:
+  - "CREATE TABLE IF NOT EXISTS \"sasas\" ("
+  - "    \"excluded\" BOOLEAN NOT NULL DEFAULT FALSE,"
+  - "    \"externalLink\" TEXT NOT NULL,"
+  - "    \"externalLinkTitle\" TEXT NOT NULL,"
+  - "    \"id\" TEXT PRIMARY KEY NOT NULL,"
+  - "    \"imageUrl\" TEXT NOT NULL,"
+  - "    \"subtitle\" TEXT NULL,"
+  - "    \"title\" TEXT NOT NULL"
+  - )

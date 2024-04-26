@@ -1,0 +1,9 @@
+---
+source: src/lib.rs
+expression: report
+---
+database_names: ~
+translated_query:
+  Err: "Expected 1 identifiers for the index name, got: [\"a\", \"b\"]"
+original_query:
+  - "CREATE INDEX a.b ON \"~/books/eloScores\" (score)"

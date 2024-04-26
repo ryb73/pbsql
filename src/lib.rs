@@ -185,12 +185,13 @@ pub fn translate_sql_wasm(query: &str) -> Result<JsTranslatedQueryResult, JsValu
 
 #[cfg(test)]
 mod tests {
+    use self::common::split_by_line_and_trim_spaces;
+    use sqlformat::{FormatOptions, QueryParams};
     use sqlparser::ast::{
         Expr, GroupByExpr, Ident, ObjectName, Query, Select, SelectItem, SetExpr,
         Statement::{self},
         Value, WildcardAdditionalOptions,
     };
-    use std::collections::HashMap;
 
     use super::*;
 
@@ -249,6 +250,47 @@ mod tests {
         println!("Compiled: {}", compiled);
     }
 
+    #[derive(serde::Serialize)]
+    struct Report {
+        database_names: Option<BTreeMap<String, String>>,
+        translated_query: Result<Vec<Vec<String>>, String>,
+        original_query: Vec<String>,
+    }
+
+    fn generate_report(sql: &str) -> Report {
+        let translate_result = translate_sql(sql);
+
+        let original_query = split_by_line_and_trim_spaces(sql);
+
+        if let Ok(TranslatedQuery { databases, query }) = &translate_result {
+            Report {
+                database_names: Some(
+                    databases
+                        .into_iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect(),
+                ),
+                translated_query: Ok(query
+                    .into_iter()
+                    .map(|s| {
+                        split_by_line_and_trim_spaces(&sqlformat::format(
+                            &s,
+                            &QueryParams::None,
+                            FormatOptions::default(),
+                        ))
+                    })
+                    .collect()),
+                original_query,
+            }
+        } else {
+            Report {
+                database_names: None,
+                translated_query: Err(translate_result.unwrap_err()),
+                original_query,
+            }
+        }
+    }
+
     #[test]
     fn create_table() {
         let sql = r#"
@@ -263,32 +305,8 @@ mod tests {
             )
         "#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Ok(TranslatedQuery { databases, query }) = translate_result {
-            assert_eq!(
-                databases,
-                HashMap::from([("~/books/things".to_string(), "main".to_string())]),
-            );
-
-            assert_eq!(
-                query,
-                vec![[
-                    &format!("CREATE TABLE IF NOT EXISTS main.{} (", VALUES_TABLE_NAME),
-                    "\"excluded\" BOOLEAN NOT NULL DEFAULT false, ",
-                    "\"externalLink\" TEXT NOT NULL, ",
-                    "\"externalLinkTitle\" TEXT NOT NULL, ",
-                    "\"id\" TEXT PRIMARY KEY NOT NULL, ",
-                    "\"imageUrl\" TEXT NOT NULL, ",
-                    "\"subtitle\" TEXT NULL, ",
-                    "\"title\" TEXT NOT NULL",
-                    ")"
-                ]
-                .join("")]
-            );
-        } else {
-            panic!("Unexpected result: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
@@ -305,32 +323,8 @@ mod tests {
             )
         "#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Ok(TranslatedQuery { databases, query }) = translate_result {
-            assert_eq!(
-                databases,
-                HashMap::from([("~/books/things".to_string(), "main".to_string())]),
-            );
-
-            assert_eq!(
-                query,
-                vec![[
-                    &format!("CREATE TABLE IF NOT EXISTS main.{} (", VALUES_TABLE_NAME),
-                    "\"excluded\" BOOLEAN NOT NULL DEFAULT false, ",
-                    "\"externalLink\" TEXT NOT NULL, ",
-                    "\"externalLinkTitle\" TEXT NOT NULL, ",
-                    "\"id\" TEXT PRIMARY KEY NOT NULL, ",
-                    "\"imageUrl\" TEXT NOT NULL, ",
-                    "\"subtitle\" TEXT NULL, ",
-                    "\"title\" TEXT NOT NULL",
-                    ")"
-                ]
-                .join("")]
-            );
-        } else {
-            panic!("Unexpected result: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
@@ -347,32 +341,8 @@ mod tests {
             )
         "#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Ok(TranslatedQuery { databases, query }) = translate_result {
-            assert_eq!(
-                databases,
-                HashMap::from([("~/books/things".to_string(), "main".to_string())]),
-            );
-
-            assert_eq!(
-                query,
-                vec![[
-                    &format!("CREATE TABLE IF NOT EXISTS main.{} (", VALUES_TABLE_NAME),
-                    "\"excluded\" BOOLEAN NOT NULL DEFAULT false, ",
-                    "\"externalLink\" TEXT NOT NULL, ",
-                    "\"externalLinkTitle\" TEXT NOT NULL, ",
-                    "\"id\" TEXT PRIMARY KEY NOT NULL, ",
-                    "\"imageUrl\" TEXT NOT NULL, ",
-                    "\"subtitle\" TEXT NULL, ",
-                    "\"title\" TEXT NOT NULL",
-                    ")"
-                ]
-                .join("")]
-            );
-        } else {
-            panic!("Unexpected result: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
@@ -389,29 +359,16 @@ mod tests {
             )
         "#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Err(err) = translate_result {
-            assert_eq!(
-                err,
-                "Expected 1 identifiers for the table name, got: [\"x\", \"y\"]"
-            );
-        } else {
-            panic!("Expected error, got: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
     fn unsupported_statement_type() {
         let sql = r#"close my_eyes;"#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Err(err) = translate_result {
-            assert_eq!(err, "not implemented: Statement::Close");
-        } else {
-            panic!("Expected error, got: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
@@ -428,32 +385,8 @@ mod tests {
             )
         "#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Ok(TranslatedQuery { databases, query }) = translate_result {
-            assert_eq!(
-                databases,
-                HashMap::from([("sasas".to_string(), "main".to_string())]),
-            );
-
-            assert_eq!(
-                query,
-                vec![[
-                    &format!("CREATE TABLE IF NOT EXISTS main.{} (", VALUES_TABLE_NAME),
-                    "\"excluded\" BOOLEAN NOT NULL DEFAULT false, ",
-                    "\"externalLink\" TEXT NOT NULL, ",
-                    "\"externalLinkTitle\" TEXT NOT NULL, ",
-                    "\"id\" TEXT PRIMARY KEY NOT NULL, ",
-                    "\"imageUrl\" TEXT NOT NULL, ",
-                    "\"subtitle\" TEXT NULL, ",
-                    "\"title\" TEXT NOT NULL",
-                    ")"
-                ]
-                .join("")]
-            );
-        } else {
-            panic!("Unexpected result: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
@@ -470,32 +403,8 @@ mod tests {
             )
         "#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Ok(TranslatedQuery { databases, query }) = translate_result {
-            assert_eq!(
-                databases,
-                HashMap::from([("/dev/null".to_string(), "main".to_string())]),
-            );
-
-            assert_eq!(
-                query,
-                vec![[
-                    &format!("CREATE TABLE IF NOT EXISTS main.{} (", VALUES_TABLE_NAME),
-                    "\"excluded\" BOOLEAN NOT NULL DEFAULT false, ",
-                    "\"externalLink\" TEXT NOT NULL, ",
-                    "\"externalLinkTitle\" TEXT NOT NULL, ",
-                    "\"id\" TEXT PRIMARY KEY NOT NULL, ",
-                    "\"imageUrl\" TEXT NOT NULL, ",
-                    "\"subtitle\" TEXT NULL, ",
-                    "\"title\" TEXT NOT NULL",
-                    ")"
-                ]
-                .join("")]
-            );
-        } else {
-            panic!("Unexpected result: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
@@ -512,32 +421,8 @@ mod tests {
             )
         "#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Ok(TranslatedQuery { databases, query }) = translate_result {
-            assert_eq!(
-                databases,
-                HashMap::from([("etc/passwd".to_string(), "main".to_string())]),
-            );
-
-            assert_eq!(
-                query,
-                vec![[
-                    &format!("CREATE TABLE IF NOT EXISTS main.{} (", VALUES_TABLE_NAME),
-                    "\"excluded\" BOOLEAN NOT NULL DEFAULT false, ",
-                    "\"externalLink\" TEXT NOT NULL, ",
-                    "\"externalLinkTitle\" TEXT NOT NULL, ",
-                    "\"id\" TEXT PRIMARY KEY NOT NULL, ",
-                    "\"imageUrl\" TEXT NOT NULL, ",
-                    "\"subtitle\" TEXT NULL, ",
-                    "\"title\" TEXT NOT NULL",
-                    ")"
-                ]
-                .join("")]
-            );
-        } else {
-            panic!("Unexpected result: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
@@ -557,99 +442,32 @@ mod tests {
             );
         "#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Ok(TranslatedQuery { databases, query }) = translate_result {
-            assert_eq!(
-                databases,
-                HashMap::from([
-                    ("~/books/things".to_string(), "main".to_string()),
-                    ("~/books/thongs".to_string(), "db1".to_string())
-                ]),
-            );
-
-            assert_eq!(
-                query,
-                vec![
-                    [
-                        &format!("CREATE TABLE IF NOT EXISTS main.{} (", VALUES_TABLE_NAME),
-                        "\"excluded\" BOOLEAN NOT NULL DEFAULT false, ",
-                        "\"externalLink\" TEXT NOT NULL, ",
-                        "\"externalLinkTitle\" TEXT NOT NULL, ",
-                        "\"id\" TEXT PRIMARY KEY NOT NULL, ",
-                        "\"imageUrl\" TEXT NOT NULL, ",
-                        "\"subtitle\" TEXT NULL, ",
-                        "\"title\" TEXT NOT NULL",
-                        ")",
-                    ]
-                    .join(""),
-                    [
-                        &format!("CREATE TABLE IF NOT EXISTS db1.{} (", VALUES_TABLE_NAME),
-                        "\"title\" TEXT NOT NULL",
-                        ")"
-                    ]
-                    .join("")
-                ]
-            );
-        } else {
-            panic!("Unexpected result: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
     fn create_index() {
         let sql = r#"CREATE INDEX "scoreIndex" ON "~/books/eloScores" (score)"#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Ok(TranslatedQuery { databases, query }) = translate_result {
-            assert_eq!(
-                databases,
-                HashMap::from([("~/books/eloScores".to_string(), "main".to_string()),]),
-            );
-
-            assert_eq!(
-                query,
-                vec![format!(
-                    "CREATE INDEX main.{}scoreIndex ON {}(score)",
-                    VALUES_TABLE_INDEX_PREFIX, VALUES_TABLE_NAME
-                )]
-            );
-        } else {
-            panic!("Unexpected result: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
     fn create_index_compound_name() {
         let sql = r#"CREATE INDEX a.b ON "~/books/eloScores" (score)"#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Err(err) = translate_result {
-            assert_eq!(
-                err,
-                "Expected 1 identifiers for the index name, got: [\"a\", \"b\"]"
-            );
-        } else {
-            panic!("Expected error, got: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
     fn create_index_compound_table_name() {
         let sql = r#"CREATE INDEX a ON x.y (score)"#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Err(err) = translate_result {
-            assert_eq!(
-                err,
-                "Expected 1 identifiers for the table name, got: [\"x\", \"y\"]"
-            );
-        } else {
-            panic!("Expected error, got: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
@@ -659,26 +477,8 @@ mod tests {
             VALUES (?, ?, DATETIME('now'), CURRENT_TIMESTAMP)
         "#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Ok(TranslatedQuery { databases, query }) = translate_result {
-            assert_eq!(
-                databases,
-                HashMap::from([("~/books/matches".to_string(), "main".to_string()),]),
-            );
-
-            assert_eq!(
-                query,
-                vec![
-                    [
-                        r#"INSERT INTO main.table_contents ("id", "loserId", "winnerId", "matchDate") "#,
-                        r#"VALUES (?, ?, DATETIME('now'), CURRENT_TIMESTAMP)"#
-                    ].join(""),
-                ]
-            );
-        } else {
-            panic!("Unexpected result: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
@@ -688,26 +488,8 @@ mod tests {
             SELECT "~/books/matches"."id" || '2', "loserId", "~/books/matches"."winnerId", "matchDate" FROM "~/books/matches"
         "#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Ok(TranslatedQuery { databases, query }) = translate_result {
-            assert_eq!(
-                databases,
-                HashMap::from([("~/books/matches".to_string(), "main".to_string()),]),
-            );
-
-            assert_eq!(
-                query,
-                vec![
-                    [
-                        r#"INSERT INTO main.table_contents ("id", "loserId", "winnerId", "matchDate") "#,
-                        r#"SELECT main.table_contents.id || '2', "loserId", main.table_contents.winnerId, "matchDate" FROM main.table_contents"#
-                    ].join(""),
-                ]
-            );
-        } else {
-            panic!("Unexpected result: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
@@ -717,16 +499,8 @@ mod tests {
             VALUES (?, ?, DATETIME('now'), CURRENT_TIMESTAMP('derp))
         "#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Err(err) = translate_result {
-            assert_eq!(
-                err,
-                "sql parser error: Unterminated string literal at Line: 3, Column 62"
-            );
-        } else {
-            panic!("Expected error, got: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
@@ -740,30 +514,8 @@ mod tests {
             LIMIT 1
         "#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Ok(TranslatedQuery { databases, query }) = translate_result {
-            assert_eq!(
-                databases,
-                HashMap::from([("~/books/things".to_string(), "main".to_string()),]),
-            );
-
-            assert_eq!(
-                query,
-                vec![
-                    [
-                        "SELECT",
-                        r#" "things".id, "things".title, "things".subtitle, "things".image_url, "things".external_link,"#,
-                        r#" "things".external_link_title, "things".excluded"#,
-                        r#" FROM main.table_contents AS "things""#,
-                        r#" WHERE "things".id = ?"#,
-                        " LIMIT 1",
-                    ].join(""),
-                ]
-            );
-        } else {
-            panic!("Unexpected result: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
@@ -778,30 +530,8 @@ mod tests {
             LIMIT 1
         "#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Ok(TranslatedQuery { databases, query }) = translate_result {
-            assert_eq!(
-                databases,
-                HashMap::from([("~/books/things".to_string(), "main".to_string()),]),
-            );
-
-            assert_eq!(
-                query,
-                vec![[
-                        "SELECT",
-                        " main.table_contents.id, main.table_contents.title, main.table_contents.subtitle,",
-                        " main.table_contents.image_url, main.table_contents.external_link,",
-                        " main.table_contents.external_link_title, main.table_contents.excluded",
-                        " FROM main.table_contents",
-                        " WHERE main.table_contents.id = ?",
-                        " LIMIT 1",
-                    ]
-                .join(""),]
-            );
-        } else {
-            panic!("Unexpected result: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
@@ -816,66 +546,24 @@ mod tests {
                 AND loser.thing_id = ?
         "#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Ok(TranslatedQuery { databases, query }) = translate_result {
-            assert_eq!(
-                databases,
-                HashMap::from([("~/books/eloScores".to_string(), "main".to_string()),]),
-            );
-
-            assert_eq!(
-                query,
-                vec![[
-                    "SELECT",
-                    r#" "winner".score AS "winnerScore", "loser".score AS "loserScore""#,
-                    r#" FROM main.table_contents AS "winner""#,
-                    r#" JOIN main.table_contents AS "loser""#,
-                    r#" WHERE "winner".thing_id = ? AND "loser".thing_id = ?"#,
-                ]
-                .join(""),]
-            );
-        } else {
-            panic!("Unexpected result: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
     fn select_null() {
         let sql = "SELECT null";
 
-        let translate_result = translate_sql(sql);
-
-        if let Ok(TranslatedQuery { databases, query }) = translate_result {
-            assert_eq!(databases.is_empty(), true,);
-
-            assert_eq!(query, vec!["SELECT NULL".to_string()]);
-        } else {
-            panic!("Unexpected result: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
     fn update() {
         let sql = r#"UPDATE "~/books/eloScores" SET "score" = ? WHERE "thingId" = ?"#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Ok(TranslatedQuery { databases, query }) = translate_result {
-            assert_eq!(
-                databases,
-                HashMap::from([("~/books/eloScores".to_string(), "main".to_string()),]),
-            );
-
-            assert_eq!(
-                query,
-                vec![
-                    [r#"UPDATE main.table_contents SET "score" = ? WHERE "thingId" = ?"#,].join(""),
-                ]
-            );
-        } else {
-            panic!("Unexpected result: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
@@ -892,35 +580,8 @@ mod tests {
             )
         "#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Ok(TranslatedQuery { databases, query }) = translate_result {
-            assert_eq!(
-                databases,
-                HashMap::from([
-                    ("~/books/eloScores".to_string(), "main".to_string()),
-                    ("~/books/matches".to_string(), "db1".to_string()),
-                ]),
-            );
-
-            assert_eq!(
-                query,
-                vec![[
-                    "SELECT",
-                    r#" loserId, winnerId"#,
-                    r#" FROM db1.table_contents"#,
-                    r#" WHERE loserId IN ("#,
-                    r#"SELECT thingId"#,
-                    r#" FROM main.table_contents"#,
-                    r#" ORDER BY score DESC, thingId DESC"#,
-                    r#" LIMIT 15"#,
-                    r#")"#,
-                ]
-                .join(""),]
-            );
-        } else {
-            panic!("Unexpected result: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
@@ -953,55 +614,16 @@ mod tests {
             LIMIT ?
         "#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Ok(TranslatedQuery { databases, query }) = translate_result {
-            assert_eq!(
-                databases,
-                HashMap::from([
-                    ("~/books/matches".to_string(), "main".to_string()),
-                    ("~/books/things".to_string(), "db1".to_string()),
-                ]),
-            );
-
-            assert_eq!(
-                query,
-                vec![[
-                    "SELECT",
-                    r#" "sq".id, "sq".num_matches"#,
-                    r#" FROM ("#,
-                    r#"SELECT "books".id, 0 AS "num_matches""#,
-                    r#" FROM db1.table_contents AS "books""#,
-                    r#" LEFT JOIN main.table_contents AS "matches""#,
-                    r#" ON ("#,
-                    r#""books".id = "matches".winner_id"#,
-                    r#" OR "books".id = "matches".loser_id"#,
-                    r#")"#,
-                    r#" WHERE "matches".loser_id IS NULL"#,
-                    r#" UNION ALL"#,
-                    r#" SELECT winner_id AS "id", 1 AS "num_matches""#,
-                    r#" FROM main.table_contents"#,
-                    r#" UNION ALL"#,
-                    r#" SELECT loser_id AS "id", 1 AS "num_matches""#,
-                    r#" FROM main.table_contents"#,
-                    r#") AS "sq""#,
-                    r#" GROUP BY "sq".id"#,
-                    r#" ORDER BY sum("sq".num_matches) ASC"#,
-                    r#" LIMIT ?"#,
-                ]
-                .join(""),]
-            );
-        } else {
-            panic!("Unexpected result: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
     fn unsupported_function() {
         let sql = "SELECT badfunc()";
 
-        let msg = translate_sql(sql).unwrap_err();
-        assert_eq!(msg, "Unsupported function: badfunc")
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
@@ -1026,43 +648,8 @@ mod tests {
             LIMIT ? OFFSET ?
         "#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Ok(TranslatedQuery { databases, query }) = translate_result {
-            assert_eq!(
-                databases,
-                HashMap::from([
-                    ("~/books/eloScores".to_string(), "main".to_string()),
-                    ("~/books/things".to_string(), "db1".to_string())
-                ]),
-            );
-
-            assert_eq!(
-                query,
-                vec![[
-                    "SELECT",
-                    r#" COUNT(*) AS "rank0""#,
-                    r#" FROM main.table_contents AS "eloScores""#,
-                    r#" JOIN main.table_contents AS "comparisonScore""#,
-                    r#" ON "eloScores".thingId = ?"#,
-                    r#" JOIN db1.table_contents AS "books""#,
-                    r#" ON "books".id = "eloScores".thingId"#,
-                    r#" WHERE"#,
-                    r#" "books".excluded = ?"#,
-                    r#" AND ("#,
-                    r#""eloScores".score > "comparisonScore".score"#,
-                    r#" OR ("#,
-                    r#""eloScores".score = "comparisonScore".score"#,
-                    r#" AND "eloScores".thingId > "comparisonScore".thingId"#,
-                    r#")"#,
-                    r#")"#,
-                    r#" LIMIT ? OFFSET ?"#,
-                ]
-                .join(""),]
-            );
-        } else {
-            panic!("Unexpected result: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
@@ -1092,107 +679,32 @@ mod tests {
             limit ?
         "#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Ok(TranslatedQuery { databases, query }) = translate_result {
-            assert_eq!(
-                databases,
-                HashMap::from([
-                    ("~/books/things".to_string(), "db1".to_string()),
-                    ("~/books/matches".to_string(), "main".to_string()),
-                ]),
-            );
-
-            assert_eq!(
-                query,
-                vec![[
-                    r#"SELECT "id""#,
-                    r#" FROM ("#,
-                    r#"SELECT"#,
-                    r#" db1.table_contents.id AS "id","#,
-                    r#" 0 AS "num_matches" FROM db1.table_contents"#,
-                    r#" LEFT JOIN main.table_contents ON ("#,
-                    r#"main.table_contents.winner_id = db1.table_contents.id"#,
-                    r#" OR main.table_contents.loser_id = db1.table_contents.id"#,
-                    r#")"#,
-                    r#" WHERE main.table_contents.loser_id IS NULL"#,
-                    r#" UNION ALL"#,
-                    r#" SELECT "winner_id" AS "id", 1 AS "num_matches" FROM main.table_contents"#,
-                    r#" UNION ALL"#,
-                    r#" SELECT "loser_id" AS "id", 1 AS "num_matches" FROM main.table_contents"#,
-                    r#") AS "sq""#,
-                    r#" GROUP BY "id""#,
-                    r#" ORDER BY sum("num_matches")"#,
-                    r#" LIMIT ?"#,
-                ]
-                .join(""),]
-            );
-        } else {
-            panic!("Unexpected result: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
     fn select_wildcard() {
         let sql = r#"select * from "~/heyy""#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Ok(TranslatedQuery { databases, query }) = translate_result {
-            assert_eq!(
-                databases,
-                HashMap::from([("~/heyy".to_string(), "main".to_string()),]),
-            );
-
-            assert_eq!(
-                query,
-                vec![[r#"SELECT *"#, r#" FROM main.table_contents"#,].join(""),]
-            );
-        } else {
-            panic!("Unexpected result: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
     fn drop_table() {
         let sql = r#"drop table "~/heyy""#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Ok(TranslatedQuery { databases, query }) = translate_result {
-            assert_eq!(
-                databases,
-                HashMap::from([("~/heyy".to_string(), "main".to_string()),]),
-            );
-
-            assert_eq!(query, vec![[r#"DROP TABLE main.table_contents"#,].join("")]);
-        } else {
-            panic!("Unexpected result: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
     fn drop_multiple_tables() {
         let sql = r#"drop table "~/heyy", "~/okokok""#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Ok(TranslatedQuery { databases, query }) = translate_result {
-            assert_eq!(
-                databases,
-                HashMap::from([
-                    ("~/heyy".to_string(), "main".to_string()),
-                    ("~/okokok".to_string(), "db1".to_string())
-                ]),
-            );
-
-            assert_eq!(
-                query,
-                vec![[r#"DROP TABLE main.table_contents, db1.table_contents"#,].join("")]
-            );
-        } else {
-            panic!("Unexpected result: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
@@ -1204,30 +716,8 @@ mod tests {
             on conflict do nothing
         "#;
 
-        let translate_result = translate_sql(sql);
-
-        if let Ok(TranslatedQuery { databases, query }) = translate_result {
-            assert_eq!(
-                databases,
-                HashMap::from([(
-                    "~/my-data-scraper/reelgood/shows-and-movies".to_string(),
-                    "main".to_string()
-                ),]),
-            );
-
-            assert_eq!(
-                query,
-                vec![[
-                    r#"INSERT INTO main.table_contents"#,
-                    r#" ("format", "isWatched", "name", "url", "imageUrl")"#,
-                    r#" VALUES (?, ?, ?, ?, ?)"#,
-                    r#" ON CONFLICT DO NOTHING"#
-                ]
-                .join("")]
-            );
-        } else {
-            panic!("Unexpected result: {:?}", translate_result);
-        }
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 
     #[test]
@@ -1242,28 +732,7 @@ mod tests {
             from "~/books/things"
         "#;
 
-        let translate_result = translate_sql(sql);
-
-        let TranslatedQuery { databases, query } = translate_result.unwrap();
-
-        assert_eq!(
-            databases,
-            HashMap::from([
-                ("~/books/non-things".to_string(), "main".to_string()),
-                ("~/books/things".to_string(), "db1".to_string())
-            ]),
-        );
-
-        assert_eq!(
-            query,
-            vec![[
-                r#"SELECT "~/books/things".id, "~/books/things".title"#,
-                r#" FROM main.table_contents AS "~/books/things""#,
-                r#" UNION "#,
-                r#"SELECT db1.table_contents.id, db1.table_contents.title"#,
-                r#" FROM db1.table_contents"#,
-            ]
-            .join("")]
-        );
+        let report = generate_report(sql);
+        insta::assert_yaml_snapshot!(report);
     }
 }

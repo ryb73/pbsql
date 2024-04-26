@@ -1,0 +1,36 @@
+---
+source: src/lib.rs
+expression: report
+---
+database_names:
+  ~/books/eloScores: main
+  ~/books/matches: db1
+translated_query:
+  Ok:
+    - - SELECT
+      - "  loserId,"
+      - "  winnerId"
+      - FROM
+      - "  db1.table_contents"
+      - WHERE
+      - "  loserId IN ("
+      - "    SELECT"
+      - "      thingId"
+      - "    FROM"
+      - "      main.table_contents"
+      - "    ORDER BY"
+      - "      score DESC,"
+      - "      thingId DESC"
+      - "    LIMIT"
+      - "      15"
+      - "  )"
+original_query:
+  - SELECT
+  - "    loserId, winnerId"
+  - "FROM \"~/books/matches\""
+  - WHERE loserId IN (
+  - "    SELECT thingId"
+  - "    FROM \"~/books/eloScores\""
+  - "    ORDER BY score DESC, thingId DESC"
+  - "    LIMIT 15"
+  - )

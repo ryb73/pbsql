@@ -1,0 +1,11 @@
+---
+source: src/lib.rs
+expression: report
+---
+database_names:
+  ~/heyy: main
+translated_query:
+  Ok:
+    - - DROP TABLE main.table_contents
+original_query:
+  - "drop table \"~/heyy\""

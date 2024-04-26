@@ -1,0 +1,14 @@
+---
+source: src/lib.rs
+expression: report
+---
+database_names:
+  ~/heyy: main
+translated_query:
+  Ok:
+    - - SELECT
+      - "  *"
+      - FROM
+      - "  main.table_contents"
+original_query:
+  - "select * from \"~/heyy\""

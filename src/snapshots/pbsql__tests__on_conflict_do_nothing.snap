@@ -1,0 +1,17 @@
+---
+source: src/lib.rs
+expression: report
+---
+database_names:
+  ~/my-data-scraper/reelgood/shows-and-movies: main
+translated_query:
+  Ok:
+    - - INSERT INTO
+      - "  main.table_contents (\"format\", \"isWatched\", \"name\", \"url\", \"imageUrl\")"
+      - VALUES
+      - "  (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING"
+original_query:
+  - "insert into \"~/my-data-scraper/reelgood/shows-and-movies\""
+  - "(\"format\", \"isWatched\", \"name\", \"url\", \"imageUrl\")"
+  - "values (?, ?, ?, ?, ?)"
+  - on conflict do nothing

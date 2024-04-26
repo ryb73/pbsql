@@ -1,0 +1,16 @@
+---
+source: src/lib.rs
+expression: report
+---
+database_names:
+  ~/books/eloScores: main
+translated_query:
+  Ok:
+    - - UPDATE
+      - "  main.table_contents"
+      - SET
+      - "  \"score\" = ?"
+      - WHERE
+      - "  \"thingId\" = ?"
+original_query:
+  - "UPDATE \"~/books/eloScores\" SET \"score\" = ? WHERE \"thingId\" = ?"

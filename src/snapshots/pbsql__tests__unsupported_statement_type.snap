@@ -1,0 +1,9 @@
+---
+source: src/lib.rs
+expression: report
+---
+database_names: ~
+translated_query:
+  Err: "not implemented: Statement::Close"
+original_query:
+  - close my_eyes;

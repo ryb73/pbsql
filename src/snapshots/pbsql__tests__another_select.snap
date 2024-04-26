@@ -1,0 +1,44 @@
+---
+source: src/lib.rs
+expression: report
+---
+database_names:
+  ~/books/eloScores: main
+  ~/books/things: db1
+translated_query:
+  Ok:
+    - - SELECT
+      - "  COUNT(*) AS \"rank0\""
+      - FROM
+      - "  main.table_contents AS \"eloScores\""
+      - "  JOIN main.table_contents AS \"comparisonScore\" ON \"eloScores\".thingId = ?"
+      - "  JOIN db1.table_contents AS \"books\" ON \"books\".id = \"eloScores\".thingId"
+      - WHERE
+      - "  \"books\".excluded = ?"
+      - "  AND ("
+      - "    \"eloScores\".score > \"comparisonScore\".score"
+      - "    OR ("
+      - "      \"eloScores\".score = \"comparisonScore\".score"
+      - "      AND \"eloScores\".thingId > \"comparisonScore\".thingId"
+      - "    )"
+      - "  )"
+      - LIMIT
+      - "  ? OFFSET ?"
+original_query:
+  - SELECT
+  - "    COUNT(*) AS \"rank0\""
+  - "FROM \"~/books/eloScores\" AS \"eloScores\""
+  - "JOIN \"~/books/eloScores\" AS \"comparisonScore\""
+  - "    ON eloScores.thingId = ?"
+  - "JOIN \"~/books/things\" AS \"books\""
+  - "    ON books.id = eloScores.thingId"
+  - WHERE
+  - "    books.excluded = ?"
+  - "    AND ("
+  - "        eloScores.score > comparisonScore.score"
+  - "        OR ("
+  - "            eloScores.score = comparisonScore.score"
+  - "            AND eloScores.thingId > comparisonScore.thingId"
+  - "        )"
+  - "    )"
+  - LIMIT ? OFFSET ?

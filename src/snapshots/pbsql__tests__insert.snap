@@ -1,0 +1,15 @@
+---
+source: src/lib.rs
+expression: report
+---
+database_names:
+  ~/books/matches: main
+translated_query:
+  Ok:
+    - - INSERT INTO
+      - "  main.table_contents (\"id\", \"loserId\", \"winnerId\", \"matchDate\")"
+      - VALUES
+      - "  (?, ?, DATETIME('now'), CURRENT_TIMESTAMP)"
+original_query:
+  - "INSERT INTO \"~/books/matches\" (\"id\", \"loserId\", \"winnerId\", \"matchDate\")"
+  - "VALUES (?, ?, DATETIME('now'), CURRENT_TIMESTAMP)"

@@ -1,0 +1,9 @@
+---
+source: src/lib.rs
+expression: report
+---
+database_names: ~
+translated_query:
+  Err: "Expected 1 identifiers for the table name, got: [\"x\", \"y\"]"
+original_query:
+  - CREATE INDEX a ON x.y (score)

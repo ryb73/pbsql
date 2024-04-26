@@ -1,0 +1,29 @@
+---
+source: src/lib.rs
+expression: report
+---
+database_names:
+  ~/books/things: main
+translated_query:
+  Ok:
+    - - SELECT
+      - "  \"things\".id,"
+      - "  \"things\".title,"
+      - "  \"things\".subtitle,"
+      - "  \"things\".image_url,"
+      - "  \"things\".external_link,"
+      - "  \"things\".external_link_title,"
+      - "  \"things\".excluded"
+      - FROM
+      - "  main.table_contents AS \"things\""
+      - WHERE
+      - "  \"things\".id = ?"
+      - LIMIT
+      - "  1"
+original_query:
+  - SELECT
+  - "    things.id, things.title, things.subtitle, things.image_url, things.external_link,"
+  - "    things.external_link_title, things.excluded"
+  - "FROM \"~/books/things\" AS \"things\""
+  - WHERE things.id = ?
+  - LIMIT 1
