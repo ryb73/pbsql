@@ -3,10 +3,14 @@ mod path_convertor;
 mod reference_extractor;
 mod sql_ast_traversal;
 
-use path_convertor::{DatabaseNamesByPath, PathConvertor};
+use object_name_replacer::{ObjectNameReplacer, ObjectNamesToReplace};
+use path_convertor::DatabaseNamesByPath;
+use reference_extractor::ReferenceExtractor;
 use serde::Serialize;
-use sql_ast_traversal::traverser::SqlAstTraverser;
-use sqlparser::{dialect::SQLiteDialect, parser::Parser};
+use sql_ast_traversal::{helpers::extract_unary_identifier, traverser::SqlAstTraverser};
+use sqlparser::{ast::ObjectName, dialect::SQLiteDialect, parser::Parser};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use typed_path::Utf8UnixPathBuf;
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 
 #[wasm_bindgen(typescript_custom_section)]
@@ -23,23 +27,132 @@ struct TranslatedQuery<Query> {
     query: Query,
 }
 
+struct RelationResolver {
+    num_relations: usize,
+}
+
+impl RelationResolver {
+    fn new() -> Self {
+        Self { num_relations: 0 }
+    }
+
+    fn get_next_relation_identifiers(&mut self) -> [String; 2] {
+        let current_num = self.num_relations;
+
+        self.num_relations += 1;
+
+        if current_num == 0 {
+            return ["main".to_string(), VALUES_TABLE_NAME.to_string()];
+        }
+
+        [
+            "db".to_string() + &current_num.to_string(),
+            VALUES_TABLE_NAME.to_string(),
+        ]
+    }
+}
+
 fn translate_sql(query: &str) -> Result<TranslatedQuery<Vec<String>>, String> {
     let dialect = SQLiteDialect {};
 
     let mut ast = Parser::parse_sql(&dialect, query).map_err(|e| e.to_string())?;
 
-    // println!("Input AST: {:#?}", ast);
+    let mut extractor = ReferenceExtractor::new();
+    extractor.traverse(&mut ast)?;
 
-    let mut path_convertor = PathConvertor::new();
+    let relations_by_path = group_relations_by_path(extractor.relations)?;
 
-    path_convertor.traverse(&mut ast)?;
+    let mut relation_resolver = RelationResolver::new();
+
+    let new_identifiers_by_path = relations_by_path
+        .keys()
+        .map(|path| (path, relation_resolver.get_next_relation_identifiers()))
+        .collect::<HashMap<_, _>>();
+
+    let relations_to_replace = relations_by_path
+        .iter()
+        .map(|(path, relations_referring_to_path)| {
+            let new_identifiers_for_path = new_identifiers_by_path.get(path).unwrap();
+
+            relations_referring_to_path
+                .into_iter()
+                .map(|ObjectName(old_identifiers)| {
+                    (
+                        old_identifiers
+                            .into_iter()
+                            .map(|i| i.value.to_owned())
+                            .collect(),
+                        new_identifiers_for_path.to_vec(),
+                    )
+                })
+        })
+        .flatten()
+        .collect::<HashMap<Vec<String>, Vec<String>>>();
+
+    let indices_to_replace = determine_new_index_names(&extractor.indices)?;
+
+    let object_names_to_replace = ObjectNamesToReplace {
+        indices_to_replace,
+        relations_to_replace,
+    };
+    let mut object_name_replacer = ObjectNameReplacer::new(&object_names_to_replace);
+
+    object_name_replacer.traverse(&mut ast)?;
 
     // println!("Output AST: {:#?}", ast);
 
+    let database_names = new_identifiers_by_path
+        .into_iter()
+        .map(|(path, new_identifiers)| (path.to_string(), new_identifiers[0].to_owned()))
+        .collect();
+
     Ok(TranslatedQuery {
-        databases: path_convertor.database_names,
+        databases: database_names,
         query: ast.iter().map(|s| s.to_string()).collect(),
     })
+}
+
+fn determine_new_index_names(
+    indices: &HashSet<ObjectName>,
+) -> Result<HashMap<String, String>, String> {
+    indices
+        .iter()
+        .map(|ObjectName(identifiers)| {
+            let index_name = extract_unary_identifier(identifiers, "index")?.to_string();
+
+            let new_index_name = format!("{}{}", VALUES_TABLE_INDEX_PREFIX, index_name);
+
+            Ok((index_name, new_index_name))
+        })
+        .collect()
+}
+
+fn normalize_path(path: &ObjectName) -> Result<String, String> {
+    let ObjectName(identifiers) = path;
+
+    let path_string = extract_unary_identifier(identifiers, "relation")?;
+
+    let path_buf = Utf8UnixPathBuf::from(path_string);
+    let path_buf = path_buf.normalize();
+
+    Ok(path_buf.to_string())
+}
+
+// Return a BTreePath so that the iteration order is deterministic, just for testing purposes.
+// I figure N won't be high so the performance hit relative to a HashMap is negligible.
+fn group_relations_by_path(
+    relations: HashSet<ObjectName>,
+) -> Result<BTreeMap<String, Vec<ObjectName>>, String> {
+    let mut relations_by_path = BTreeMap::new();
+
+    for relation in relations {
+        let path = normalize_path(&relation)?;
+
+        let entry = relations_by_path.entry(path).or_insert_with(Vec::new);
+        entry.push(relation);
+    }
+
+    Ok(relations_by_path)
 }
 
 #[wasm_bindgen]
@@ -275,7 +388,7 @@ mod tests {
         if let Err(err) = translate_result {
             assert_eq!(
                 err,
-                "Expected 1 identifiers for the table name, got: [\"x\", \"y\"]"
+                "Expected 1 identifiers for the relation name, got: [\"x\", \"y\"]"
             );
         } else {
             panic!("Expected error, got: {:?}", translate_result);
@@ -526,7 +639,7 @@ mod tests {
         if let Err(err) = translate_result {
             assert_eq!(
                 err,
-                "Expected 1 identifiers for the table name, got: [\"x\", \"y\"]"
+                "Expected 1 identifiers for the relation name, got: [\"x\", \"y\"]"
             );
         } else {
             panic!("Expected error, got: {:?}", translate_result);
@@ -779,8 +892,8 @@ mod tests {
             assert_eq!(
                 databases,
                 HashMap::from([
-                    ("~/books/matches".to_string(), "main".to_string()),
-                    ("~/books/eloScores".to_string(), "db1".to_string())
+                    ("~/books/eloScores".to_string(), "main".to_string()),
+                    ("~/books/matches".to_string(), "db1".to_string()),
                 ]),
             );
 
@@ -789,10 +902,10 @@ mod tests {
                 vec![[
                     "SELECT",
                     r#" loserId, winnerId"#,
-                    r#" FROM main.table_contents"#,
+                    r#" FROM db1.table_contents"#,
                     r#" WHERE loserId IN ("#,
                     r#"SELECT thingId"#,
-                    r#" FROM db1.table_contents"#,
+                    r#" FROM main.table_contents"#,
                     r#" ORDER BY score DESC, thingId DESC"#,
                     r#" LIMIT 15"#,
                     r#")"#,
@@ -840,8 +953,8 @@ mod tests {
             assert_eq!(
                 databases,
                 HashMap::from([
-                    ("~/books/things".to_string(), "main".to_string()),
-                    ("~/books/matches".to_string(), "db1".to_string())
+                    ("~/books/matches".to_string(), "main".to_string()),
+                    ("~/books/things".to_string(), "db1".to_string()),
                 ]),
             );
 
@@ -852,8 +965,8 @@ mod tests {
                     r#" "sq".id, "sq".num_matches"#,
                     r#" FROM ("#,
                     r#"SELECT "books".id, 0 AS "num_matches""#,
-                    r#" FROM main.table_contents AS "books""#,
-                    r#" LEFT JOIN db1.table_contents AS "matches""#,
+                    r#" FROM db1.table_contents AS "books""#,
+                    r#" LEFT JOIN main.table_contents AS "matches""#,
                     r#" ON ("#,
                     r#""books".id = "matches".winner_id"#,
                     r#" OR "books".id = "matches".loser_id"#,
@@ -861,10 +974,10 @@ mod tests {
                     r#" WHERE "matches".loser_id IS NULL"#,
                     r#" UNION ALL"#,
                     r#" SELECT winner_id AS "id", 1 AS "num_matches""#,
-                    r#" FROM db1.table_contents"#,
+                    r#" FROM main.table_contents"#,
                     r#" UNION ALL"#,
                     r#" SELECT loser_id AS "id", 1 AS "num_matches""#,
-                    r#" FROM db1.table_contents"#,
+                    r#" FROM main.table_contents"#,
                     r#") AS "sq""#,
                     r#" GROUP BY "sq".id"#,
                     r#" ORDER BY sum("sq".num_matches) ASC"#,
@@ -979,8 +1092,8 @@ mod tests {
             assert_eq!(
                 databases,
                 HashMap::from([
-                    ("~/books/things".to_string(), "main".to_string()),
-                    ("~/books/matches".to_string(), "db1".to_string())
+                    ("~/books/things".to_string(), "db1".to_string()),
+                    ("~/books/matches".to_string(), "main".to_string()),
                 ]),
             );
 
@@ -990,17 +1103,17 @@ mod tests {
                     r#"SELECT "id""#,
                     r#" FROM ("#,
                     r#"SELECT"#,
-                    r#" main.table_contents.id AS "id","#,
-                    r#" 0 AS "num_matches" FROM main.table_contents"#,
-                    r#" LEFT JOIN db1.table_contents ON ("#,
-                    r#"db1.table_contents.winner_id = main.table_contents.id"#,
-                    r#" OR db1.table_contents.loser_id = main.table_contents.id"#,
+                    r#" db1.table_contents.id AS "id","#,
+                    r#" 0 AS "num_matches" FROM db1.table_contents"#,
+                    r#" LEFT JOIN main.table_contents ON ("#,
+                    r#"main.table_contents.winner_id = db1.table_contents.id"#,
+                    r#" OR main.table_contents.loser_id = db1.table_contents.id"#,
                     r#")"#,
-                    r#" WHERE db1.table_contents.loser_id IS NULL"#,
+                    r#" WHERE main.table_contents.loser_id IS NULL"#,
                     r#" UNION ALL"#,
-                    r#" SELECT "winner_id" AS "id", 1 AS "num_matches" FROM db1.table_contents"#,
+                    r#" SELECT "winner_id" AS "id", 1 AS "num_matches" FROM main.table_contents"#,
                     r#" UNION ALL"#,
-                    r#" SELECT "loser_id" AS "id", 1 AS "num_matches" FROM db1.table_contents"#,
+                    r#" SELECT "loser_id" AS "id", 1 AS "num_matches" FROM main.table_contents"#,
                     r#") AS "sq""#,
                     r#" GROUP BY "id""#,
                     r#" ORDER BY sum("num_matches")"#,

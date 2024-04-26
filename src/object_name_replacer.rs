@@ -35,8 +35,8 @@ impl Scope {
 
 #[derive(Debug)]
 pub struct ObjectNamesToReplace {
-    indices_to_replace: HashMap<String, String>,
-    relations_to_replace: RelationsToReplace,
+    pub indices_to_replace: HashMap<String, String>,
+    pub relations_to_replace: RelationsToReplace,
 }
 
 #[derive(Debug)]
@@ -46,7 +46,7 @@ pub struct ObjectNameReplacer<'a> {
 }
 
 impl<'a> ObjectNameReplacer<'a> {
-    pub fn _new(object_names_to_replace: &'a ObjectNamesToReplace) -> ObjectNameReplacer<'a> {
+    pub fn new(object_names_to_replace: &'a ObjectNamesToReplace) -> ObjectNameReplacer<'a> {
         ObjectNameReplacer {
             object_names_to_replace,
             scopes: vec![Scope::new()],
@@ -693,7 +693,7 @@ mod tests {
 
         let mut ast = Parser::parse_sql(&dialect, query).map_err(|e| e.to_string())?;
 
-        let mut object_name_replacer = ObjectNameReplacer::_new(names_to_replace);
+        let mut object_name_replacer = ObjectNameReplacer::new(names_to_replace);
 
         object_name_replacer.traverse(&mut ast)?;
 

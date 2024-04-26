@@ -42,7 +42,7 @@ pub struct PathConvertor {
 }
 
 impl PathConvertor {
-    pub fn new() -> Self {
+    pub fn _new() -> Self {
         PathConvertor {
             database_names: HashMap::new(),
             scopes: vec![Scope::new()],
@@ -710,7 +710,7 @@ mod tests {
 
         let mut ast = Parser::parse_sql(&dialect, query).map_err(|e| e.to_string())?;
 
-        let mut path_convertor = PathConvertor::new();
+        let mut path_convertor = PathConvertor::_new();
 
         path_convertor.traverse(&mut ast)?;
 

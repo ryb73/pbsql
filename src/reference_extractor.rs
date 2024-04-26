@@ -17,7 +17,7 @@ pub struct ReferenceExtractor {
 }
 
 impl ReferenceExtractor {
-    pub fn _new() -> Self {
+    pub fn new() -> Self {
         ReferenceExtractor {
             indices: HashSet::new(),
             relations: HashSet::new(),
@@ -128,7 +128,7 @@ mod tests {
 
         let mut ast = Parser::parse_sql(&dialect, query).map_err(|e| e.to_string())?;
 
-        let mut reference_extractor = ReferenceExtractor::_new();
+        let mut reference_extractor = ReferenceExtractor::new();
 
         reference_extractor.traverse(&mut ast)?;
 
