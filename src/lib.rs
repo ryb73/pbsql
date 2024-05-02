@@ -186,7 +186,6 @@ pub fn translate_sql_wasm(query: &str) -> Result<JsTranslatedQueryResult, JsValu
 #[cfg(test)]
 mod tests {
     use self::common::split_by_line_and_trim_spaces;
-    use sqlformat::{FormatOptions, QueryParams};
     use sqlparser::ast::{
         Expr, GroupByExpr, Ident, ObjectName, Query, Select, SelectItem, SetExpr,
         Statement::{self},
@@ -250,50 +249,55 @@ mod tests {
         println!("Compiled: {}", compiled);
     }
 
-    #[derive(serde::Serialize)]
-    struct Report {
-        database_names: Option<BTreeMap<String, String>>,
-        translated_query: Result<Vec<Vec<String>>, String>,
-        original_query: Vec<String>,
-    }
+    mod translator {
+        use super::*;
+        use sqlformat::{FormatOptions, QueryParams};
+        use std::collections::BTreeMap;
 
-    fn generate_report(sql: &str) -> Report {
-        let translate_result = translate_sql(sql);
+        #[derive(serde::Serialize)]
+        struct Report {
+            database_names: Option<BTreeMap<String, String>>,
+            translated_query: Result<Vec<Vec<String>>, String>,
+            original_query: Vec<String>,
+        }
 
-        let original_query = split_by_line_and_trim_spaces(sql);
+        fn generate_report(sql: &str) -> Report {
+            let translate_result = translate_sql(sql);
 
-        if let Ok(TranslatedQuery { databases, query }) = &translate_result {
-            Report {
-                database_names: Some(
-                    databases
+            let original_query = split_by_line_and_trim_spaces(sql);
+
+            if let Ok(TranslatedQuery { databases, query }) = &translate_result {
+                Report {
+                    database_names: Some(
+                        databases
+                            .into_iter()
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect(),
+                    ),
+                    translated_query: Ok(query
                         .into_iter()
-                        .map(|(k, v)| (k.clone(), v.clone()))
-                        .collect(),
-                ),
-                translated_query: Ok(query
-                    .into_iter()
-                    .map(|s| {
-                        split_by_line_and_trim_spaces(&sqlformat::format(
-                            &s,
-                            &QueryParams::None,
-                            FormatOptions::default(),
-                        ))
-                    })
-                    .collect()),
-                original_query,
-            }
-        } else {
-            Report {
-                database_names: None,
-                translated_query: Err(translate_result.unwrap_err()),
-                original_query,
+                        .map(|s| {
+                            split_by_line_and_trim_spaces(&sqlformat::format(
+                                &s,
+                                &QueryParams::None,
+                                FormatOptions::default(),
+                            ))
+                        })
+                        .collect()),
+                    original_query,
+                }
+            } else {
+                Report {
+                    database_names: None,
+                    translated_query: Err(translate_result.unwrap_err()),
+                    original_query,
+                }
             }
         }
-    }
 
-    #[test]
-    fn create_table() {
-        let sql = r#"
+        #[test]
+        fn create_table() {
+            let sql = r#"
             CREATE TABLE IF NOT EXISTS "~/books/things" (
                 "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
                 "externalLink" TEXT NOT NULL,
@@ -305,13 +309,13 @@ mod tests {
             )
         "#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn create_table_using_parent() {
-        let sql = r#"
+        #[test]
+        fn create_table_using_parent() {
+            let sql = r#"
             CREATE TABLE IF NOT EXISTS "~/books/bings/../things" (
                 "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
                 "externalLink" TEXT NOT NULL,
@@ -323,13 +327,13 @@ mod tests {
             )
         "#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn create_table_using_curdir() {
-        let sql = r#"
+        #[test]
+        fn create_table_using_curdir() {
+            let sql = r#"
             CREATE TABLE IF NOT EXISTS "~/books/./things/." (
                 "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
                 "externalLink" TEXT NOT NULL,
@@ -341,13 +345,13 @@ mod tests {
             )
         "#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn create_table_disallow_compound_identifier() {
-        let sql = r#"
+        #[test]
+        fn create_table_disallow_compound_identifier() {
+            let sql = r#"
             CREATE TABLE IF NOT EXISTS x.y (
                 "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
                 "externalLink" TEXT NOT NULL,
@@ -359,21 +363,21 @@ mod tests {
             )
         "#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn unsupported_statement_type() {
-        let sql = r#"close my_eyes;"#;
+        #[test]
+        fn unsupported_statement_type() {
+            let sql = r#"close my_eyes;"#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn create_table_outside_home() {
-        let sql = r#"
+        #[test]
+        fn create_table_outside_home() {
+            let sql = r#"
             CREATE TABLE IF NOT EXISTS "sasas" (
                 "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
                 "externalLink" TEXT NOT NULL,
@@ -385,13 +389,13 @@ mod tests {
             )
         "#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn create_table_root() {
-        let sql = r#"
+        #[test]
+        fn create_table_root() {
+            let sql = r#"
             CREATE TABLE IF NOT EXISTS "/dev/null" (
                 "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
                 "externalLink" TEXT NOT NULL,
@@ -403,13 +407,13 @@ mod tests {
             )
         "#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn create_table_outside_home_using_parent() {
-        let sql = r#"
+        #[test]
+        fn create_table_outside_home_using_parent() {
+            let sql = r#"
             CREATE TABLE IF NOT EXISTS "~/hi/../../etc/passwd" (
                 "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
                 "externalLink" TEXT NOT NULL,
@@ -421,13 +425,13 @@ mod tests {
             )
         "#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn create_table_multiple() {
-        let sql = r#"
+        #[test]
+        fn create_table_multiple() {
+            let sql = r#"
             CREATE TABLE IF NOT EXISTS "~/books/things" (
                 "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
                 "externalLink" TEXT NOT NULL,
@@ -442,70 +446,70 @@ mod tests {
             );
         "#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn create_index() {
-        let sql = r#"CREATE INDEX "scoreIndex" ON "~/books/eloScores" (score)"#;
+        #[test]
+        fn create_index() {
+            let sql = r#"CREATE INDEX "scoreIndex" ON "~/books/eloScores" (score)"#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn create_index_compound_name() {
-        let sql = r#"CREATE INDEX a.b ON "~/books/eloScores" (score)"#;
+        #[test]
+        fn create_index_compound_name() {
+            let sql = r#"CREATE INDEX a.b ON "~/books/eloScores" (score)"#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn create_index_compound_table_name() {
-        let sql = r#"CREATE INDEX a ON x.y (score)"#;
+        #[test]
+        fn create_index_compound_table_name() {
+            let sql = r#"CREATE INDEX a ON x.y (score)"#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn insert() {
-        let sql = r#"
+        #[test]
+        fn insert() {
+            let sql = r#"
             INSERT INTO "~/books/matches" ("id", "loserId", "winnerId", "matchDate")
             VALUES (?, ?, DATETIME('now'), CURRENT_TIMESTAMP)
         "#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn insert_from_select() {
-        let sql = r#"
+        #[test]
+        fn insert_from_select() {
+            let sql = r#"
             INSERT INTO "~/books/matches" ("id", "loserId", "winnerId", "matchDate")
             SELECT "~/books/matches"."id" || '2', "loserId", "~/books/matches"."winnerId", "matchDate" FROM "~/books/matches"
         "#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn parser_error() {
-        let sql = r#"
+        #[test]
+        fn parser_error() {
+            let sql = r#"
             INSERT INTO "~/books/matches" ("id", "loserId", "winnerId", "matchDate")
             VALUES (?, ?, DATETIME('now'), CURRENT_TIMESTAMP('derp))
         "#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn select1_with_alias() {
-        let sql = r#"
+        #[test]
+        fn select1_with_alias() {
+            let sql = r#"
             SELECT
                 things.id, things.title, things.subtitle, things.image_url, things.external_link,
                 things.external_link_title, things.excluded
@@ -514,13 +518,13 @@ mod tests {
             LIMIT 1
         "#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn select1() {
-        let sql = r#"
+        #[test]
+        fn select1() {
+            let sql = r#"
             SELECT
                 "~/books/things".id, "~/books/things".title, "~/books/things".subtitle,
                 "~/books/things".image_url, "~/books/things".external_link,
@@ -530,13 +534,13 @@ mod tests {
             LIMIT 1
         "#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn select_with_join() {
-        let sql = r#"
+        #[test]
+        fn select_with_join() {
+            let sql = r#"
             SELECT
                 winner.score AS "winnerScore", loser.score AS "loserScore"
             FROM "~/books/eloScores" AS "winner"
@@ -546,29 +550,29 @@ mod tests {
                 AND loser.thing_id = ?
         "#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn select_null() {
-        let sql = "SELECT null";
+        #[test]
+        fn select_null() {
+            let sql = "SELECT null";
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn update() {
-        let sql = r#"UPDATE "~/books/eloScores" SET "score" = ? WHERE "thingId" = ?"#;
+        #[test]
+        fn update() {
+            let sql = r#"UPDATE "~/books/eloScores" SET "score" = ? WHERE "thingId" = ?"#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn subquery() {
-        let sql = r#"
+        #[test]
+        fn subquery() {
+            let sql = r#"
             SELECT
                 loserId, winnerId
             FROM "~/books/matches"
@@ -580,13 +584,13 @@ mod tests {
             )
         "#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn union_in_subquery() {
-        let sql = r#"
+        #[test]
+        fn union_in_subquery() {
+            let sql = r#"
             SELECT
                 sq.id, sq.num_matches
             FROM (
@@ -614,21 +618,21 @@ mod tests {
             LIMIT ?
         "#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn unsupported_function() {
-        let sql = "SELECT badfunc()";
+        #[test]
+        fn unsupported_function() {
+            let sql = "SELECT badfunc()";
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn another_select() {
-        let sql = r#"
+        #[test]
+        fn another_select() {
+            let sql = r#"
             SELECT
                 COUNT(*) AS "rank0"
             FROM "~/books/eloScores" AS "eloScores"
@@ -648,13 +652,13 @@ mod tests {
             LIMIT ? OFFSET ?
         "#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn and_another() {
-        let sql = r#"
+        #[test]
+        fn and_another() {
+            let sql = r#"
             select "id"
             from (
                 select
@@ -679,50 +683,50 @@ mod tests {
             limit ?
         "#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn select_wildcard() {
-        let sql = r#"select * from "~/heyy""#;
+        #[test]
+        fn select_wildcard() {
+            let sql = r#"select * from "~/heyy""#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn drop_table() {
-        let sql = r#"drop table "~/heyy""#;
+        #[test]
+        fn drop_table() {
+            let sql = r#"drop table "~/heyy""#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn drop_multiple_tables() {
-        let sql = r#"drop table "~/heyy", "~/okokok""#;
+        #[test]
+        fn drop_multiple_tables() {
+            let sql = r#"drop table "~/heyy", "~/okokok""#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn on_conflict_do_nothing() {
-        let sql = r#"
+        #[test]
+        fn on_conflict_do_nothing() {
+            let sql = r#"
             insert into "~/my-data-scraper/reelgood/shows-and-movies"
             ("format", "isWatched", "name", "url", "imageUrl")
             values (?, ?, ?, ?, ?)
             on conflict do nothing
         "#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
-    }
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
-    #[test]
-    fn union_separate_scopes() {
-        let sql = r#"
+        #[test]
+        fn union_separate_scopes() {
+            let sql = r#"
             select "~/books/things".id, "~/books/things".title
             from "~/books/non-things" as "~/books/things"
 
@@ -732,7 +736,8 @@ mod tests {
             from "~/books/things"
         "#;
 
-        let report = generate_report(sql);
-        insta::assert_yaml_snapshot!(report);
+            let report = generate_report(sql);
+            insta::assert_yaml_snapshot!(report);
+        }
     }
 }
