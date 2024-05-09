@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 serde = { version = "1.0.196", features = ["derive"] }
 serde-wasm-bindgen = "0.4"
 sqlparser = { version = "0.43.1", features = ["serde"] }
+tsify = "0.4.5"
 typed-path = "0.7.1"
 wasm-bindgen = "0.2.90"
 

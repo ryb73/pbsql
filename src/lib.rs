@@ -8,11 +8,12 @@ mod tql_validator;
 use object_name_replacer::{ObjectNameReplacer, ObjectNamesToReplace};
 use path_convertor::DatabaseNamesByPath;
 use reference_extractor::ReferenceExtractor;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sql_ast_traversal::{helpers::extract_unary_identifier, traverser::SqlAstTraverser};
 use sqlparser::{ast::ObjectName, dialect::SQLiteDialect, parser::Parser};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use tql_validator::TqlValidator;
+use tsify::Tsify;
 use typed_path::Utf8UnixPathBuf;
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 
@@ -20,6 +21,28 @@ use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 const TS_RUST_RESULT: &'static str = r#"
 export type RustResult<O, E> = { Ok: O } | { Err: E };
 "#;
+
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct RustResult2<O, E> {
+    ok: Option<O>,
+    err: Option<E>,
+}
+
+impl<O, E> From<Result<O, E>> for RustResult2<O, E> {
+    fn from(result: Result<O, E>) -> Self {
+        match result {
+            Ok(ok) => RustResult2 {
+                ok: Some(ok),
+                err: None,
+            },
+            Err(err) => RustResult2 {
+                ok: None,
+                err: Some(err),
+            },
+        }
+    }
+}
 
 const VALUES_TABLE_NAME: &str = "table_contents";
 const VALUES_TABLE_INDEX_PREFIX: &str = "tbl_";
@@ -159,6 +182,69 @@ fn group_relations_by_path(
     }
 
     Ok(relations_by_path)
+}
+
+pub fn extract_references(sql: &str) -> Result<ExtractedReferences, String> {
+    let dialect = SQLiteDialect {};
+
+    let mut ast = Parser::parse_sql(&dialect, sql).map_err(|e| e.to_string())?;
+
+    let mut extractor = ReferenceExtractor::new();
+    extractor.traverse(&mut ast)?;
+
+    Ok(extractor.into())
+}
+
+#[derive(Serialize, Deserialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct ExtractedReferences {
+    pub relations: Vec<Vec<String>>,
+    pub indices: Vec<Vec<String>>,
+}
+
+impl From<ReferenceExtractor> for ExtractedReferences {
+    fn from(extractor: ReferenceExtractor) -> Self {
+        Self {
+            relations: extractor
+                .relations
+                .into_iter()
+                .map(|ObjectName(identifiers)| identifiers.into_iter().map(|i| i.value).collect())
+                .collect(),
+            indices: extractor
+                .indices
+                .into_iter()
+                .map(|ObjectName(identifiers)| identifiers.into_iter().map(|i| i.value).collect())
+                .collect(),
+        }
+    }
+}
+
+#[wasm_bindgen(js_name = extractReferences)]
+pub fn extract_references_wasm(sql: &str) -> RustResult2<ExtractedReferences, String> {
+    extract_references(sql).into()
+}
+
+fn validate_tql_result(sql: &str) -> Result<(), String> {
+    let dialect = SQLiteDialect {};
+
+    let mut ast = Parser::parse_sql(&dialect, sql).map_err(|e| e.to_string())?;
+
+    let mut validator = TqlValidator::new();
+    validator.traverse(&mut ast)?;
+
+    Ok(())
+}
+
+#[wasm_bindgen(getter_with_clone)]
+pub struct ValidationError {
+    pub message: String,
+}
+
+#[wasm_bindgen(js_name = validateTql)]
+pub fn validate_tql(sql: &str) -> Option<ValidationError> {
+    validate_tql_result(sql)
+        .err()
+        .map(|e| ValidationError { message: e })
 }
 
 #[wasm_bindgen]
