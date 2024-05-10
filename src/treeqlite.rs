@@ -1,384 +1,107 @@
-mod common;
-mod object_name_replacer;
-mod path_convertor;
-mod reference_extractor;
-mod sql_ast_traversal;
-mod tql_validator;
-mod treeqlite;
-
-use object_name_replacer::{ObjectNameReplacer, ObjectNamesToReplace};
-use path_convertor::DatabaseNamesByPath;
-use reference_extractor::ReferenceExtractor;
-use serde::{Deserialize, Serialize};
-use sql_ast_traversal::{helpers::extract_unary_identifier, traverser::SqlAstTraverser};
-use sqlparser::{ast::ObjectName, dialect::SQLiteDialect, parser::Parser};
-use std::collections::{BTreeMap, HashMap, HashSet};
-use tql_validator::TqlValidator;
-use tsify::Tsify;
+use super::translate_sql;
+use super::TranslatedQuery;
+use std::collections::HashMap;
 use typed_path::Utf8UnixPathBuf;
-use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 
-#[wasm_bindgen(typescript_custom_section)]
-const TS_RUST_RESULT: &'static str = r#"
-export type RustResult<O, E> = { Ok: O } | { Err: E };
-"#;
-
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct RustResult2<O, E> {
-    ok: Option<O>,
-    err: Option<E>,
+struct Config {
+    root_path: Utf8UnixPathBuf,
 }
 
-impl<O, E> From<Result<O, E>> for RustResult2<O, E> {
-    fn from(result: Result<O, E>) -> Self {
-        match result {
-            Ok(ok) => RustResult2 {
-                ok: Some(ok),
-                err: None,
-            },
-            Err(err) => RustResult2 {
-                ok: None,
-                err: Some(err),
-            },
-        }
-    }
+pub struct TreeQLiteExecutor {
+    config: Config,
 }
 
-const VALUES_TABLE_NAME: &str = "table_contents";
-const VALUES_TABLE_INDEX_PREFIX: &str = "tbl_";
-
-#[derive(Debug, Serialize)]
-pub struct TranslatedQuery<Query> {
-    databases: DatabaseNamesByPath,
-    query: Query,
-}
-
-struct RelationResolver {
-    num_relations: usize,
-}
-
-impl RelationResolver {
-    fn new() -> Self {
-        Self { num_relations: 0 }
+impl TreeQLiteExecutor {
+    pub const fn new(config: Config) -> Self {
+        Self { config }
     }
 
-    fn get_next_relation_identifiers(&mut self) -> [String; 2] {
-        let current_num = self.num_relations;
-
-        self.num_relations += 1;
-
-        if current_num == 0 {
-            return ["main".to_string(), VALUES_TABLE_NAME.to_string()];
+    fn convert_db_path_to_fs_path(&self, path: &str) -> Result<String, String> {
+        if !path.starts_with("~/") {
+            return Err(format!("Path must start with ~/: {}", path));
         }
 
-        [
-            "db".to_string() + &current_num.to_string(),
-            VALUES_TABLE_NAME.to_string(),
-        ]
-    }
-}
+        let relative_path = path.replacen("~/", "./", 1);
 
-fn translate_sql(query: &str) -> Result<TranslatedQuery<Vec<String>>, String> {
-    let dialect = SQLiteDialect {};
-
-    let mut ast = Parser::parse_sql(&dialect, query).map_err(|e| e.to_string())?;
-
-    let mut validator = TqlValidator::new();
-    validator.traverse(&mut ast)?;
-
-    let mut extractor = ReferenceExtractor::new();
-    extractor.traverse(&mut ast)?;
-
-    let relations_by_path = group_relations_by_path(extractor.relations)?;
-
-    let mut relation_resolver = RelationResolver::new();
-
-    let new_identifiers_by_path = relations_by_path
-        .keys()
-        .map(|path| (path, relation_resolver.get_next_relation_identifiers()))
-        .collect::<HashMap<_, _>>();
-
-    let relations_to_replace = relations_by_path
-        .iter()
-        .map(|(path, relations_referring_to_path)| {
-            let new_identifiers_for_path = new_identifiers_by_path.get(path).unwrap();
-
-            relations_referring_to_path
-                .into_iter()
-                .map(|ObjectName(old_identifiers)| {
-                    (
-                        old_identifiers
-                            .into_iter()
-                            .map(|i| i.value.to_owned())
-                            .collect(),
-                        new_identifiers_for_path.to_vec(),
-                    )
-                })
-        })
-        .flatten()
-        .collect::<HashMap<Vec<String>, Vec<String>>>();
-
-    let indices_to_replace = determine_new_index_names(&extractor.indices)?;
-
-    let object_names_to_replace = ObjectNamesToReplace {
-        indices_to_replace,
-        relations_to_replace,
-    };
-    let mut object_name_replacer = ObjectNameReplacer::new(&object_names_to_replace);
-
-    object_name_replacer.traverse(&mut ast)?;
-
-    // println!("Output AST: {:#?}", ast);
-
-    let database_names = new_identifiers_by_path
-        .into_iter()
-        .map(|(path, new_identifiers)| (path.to_string(), new_identifiers[0].to_owned()))
-        .collect();
-
-    Ok(TranslatedQuery {
-        databases: database_names,
-        query: ast.iter().map(|s| s.to_string()).collect(),
-    })
-}
-
-fn determine_new_index_names(
-    indices: &HashSet<ObjectName>,
-) -> Result<HashMap<String, String>, String> {
-    indices
-        .iter()
-        .map(|ObjectName(identifiers)| {
-            let index_name = extract_unary_identifier(identifiers, "index")?.to_string();
-
-            let new_index_name = format!("{}{}", VALUES_TABLE_INDEX_PREFIX, index_name);
-
-            Ok((index_name, new_index_name))
-        })
-        .collect()
-}
-
-fn normalize_path(path: &ObjectName) -> Result<String, String> {
-    let ObjectName(identifiers) = path;
-
-    let path_string = extract_unary_identifier(identifiers, "relation")?;
-
-    let path_buf = Utf8UnixPathBuf::from(path_string);
-    let path_buf = path_buf.normalize();
-
-    Ok(path_buf.to_string())
-}
-
-// Return a BTreePath so that the iteration order is deterministic, just for testing purposes.
-// I figure N won't be high so the performance hit relative to a HashMap is negligible.
-fn group_relations_by_path(
-    relations: HashSet<ObjectName>,
-) -> Result<BTreeMap<String, Vec<ObjectName>>, String> {
-    let mut relations_by_path = BTreeMap::new();
-
-    for relation in relations {
-        let path = normalize_path(&relation)?;
-
-        let entry = relations_by_path.entry(path).or_insert_with(Vec::new);
-        entry.push(relation);
+        Ok(self
+            .config
+            .root_path
+            .join(relative_path)
+            .normalize()
+            .to_string())
     }
 
-    Ok(relations_by_path)
-}
+    pub fn execute_query(&self, sql: &str) -> Result<HashMap<String, String>, String> {
+        let TranslatedQuery {
+            databases,
+            query: _translated_query,
+        } = translate_sql(sql)?;
 
-pub fn extract_references(sql: &str) -> Result<ExtractedReferences, String> {
-    let dialect = SQLiteDialect {};
+        let db_paths_by_reference = databases
+            .iter()
+            .map(|(k, v)| (v.to_owned(), k.to_owned()))
+            .collect::<HashMap<_, _>>();
 
-    let mut ast = Parser::parse_sql(&dialect, sql).map_err(|e| e.to_string())?;
+        let fs_paths_by_reference = db_paths_by_reference
+            .into_iter()
+            .map(|(k, v)| Ok((k, self.convert_db_path_to_fs_path(&v)?)))
+            .collect::<Result<HashMap<_, _>, String>>()?;
 
-    let mut extractor = ReferenceExtractor::new();
-    extractor.traverse(&mut ast)?;
-
-    Ok(extractor.into())
-}
-
-#[derive(Serialize, Deserialize, Tsify)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct ExtractedReferences {
-    pub relations: Vec<Vec<String>>,
-    pub indices: Vec<Vec<String>>,
-}
-
-impl From<ReferenceExtractor> for ExtractedReferences {
-    fn from(extractor: ReferenceExtractor) -> Self {
-        Self {
-            relations: extractor
-                .relations
-                .into_iter()
-                .map(|ObjectName(identifiers)| identifiers.into_iter().map(|i| i.value).collect())
-                .collect(),
-            indices: extractor
-                .indices
-                .into_iter()
-                .map(|ObjectName(identifiers)| identifiers.into_iter().map(|i| i.value).collect())
-                .collect(),
+        let _sqlite_connection = if let Some(main_path) = fs_paths_by_reference.get("main") {
+            rusqlite::Connection::open(main_path)
+        } else {
+            rusqlite::Connection::open_in_memory()
         }
+        .map_err(|e| format!("Error opening SQLite connection: {}", e))?;
+
+        Ok(fs_paths_by_reference)
     }
-}
-
-#[wasm_bindgen(js_name = extractReferences)]
-pub fn extract_references_wasm(sql: &str) -> RustResult2<ExtractedReferences, String> {
-    extract_references(sql).into()
-}
-
-fn validate_tql_result(sql: &str) -> Result<(), String> {
-    let dialect = SQLiteDialect {};
-
-    let mut ast = Parser::parse_sql(&dialect, sql).map_err(|e| e.to_string())?;
-
-    let mut validator = TqlValidator::new();
-    validator.traverse(&mut ast)?;
-
-    Ok(())
-}
-
-#[wasm_bindgen(getter_with_clone)]
-pub struct ValidationError {
-    pub message: String,
-}
-
-#[wasm_bindgen(js_name = validateTql)]
-pub fn validate_tql(sql: &str) -> Option<ValidationError> {
-    validate_tql_result(sql)
-        .err()
-        .map(|e| ValidationError { message: e })
-}
-
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(typescript_type = "RustResult<TranslatedQuery, string>")]
-    pub type JsTranslatedQueryResult;
-}
-
-#[wasm_bindgen(typescript_custom_section)]
-const TS_RUST_RESULT: &'static str = r#"
-export type TranslatedQuery = {
-    databases: Map<string, string>;
-    query: string[];
-};
-"#;
-
-#[wasm_bindgen(js_name = translateSql)]
-pub fn translate_sql_wasm(query: &str) -> Result<JsTranslatedQueryResult, JsValue> {
-    let result = translate_sql(query);
-    serde_wasm_bindgen::to_value(&result)
-        .map_err(|err| JsValue::from_str(&format!("{:?}", err)))
-        .map(|x| x.into())
 }
 
 #[cfg(test)]
 mod tests {
-    use self::common::split_by_line_and_trim_spaces;
-    use sqlparser::ast::{
-        Expr, GroupByExpr, Ident, ObjectName, Query, Select, SelectItem, SetExpr,
-        Statement::{self},
-        Value, WildcardAdditionalOptions,
-    };
-
     use super::*;
 
-    #[test]
-    fn build_sql_test() {
-        let blah = Statement::Insert {
-            or: None,
-            ignore: false,
-            into: true,
-            table_name: ObjectName(vec![Ident::new("table")]),
-            table_alias: Some(Ident::new("t")),
-            columns: vec![Ident::new("a")],
-            overwrite: false,
-            source: Some(Box::new(Query {
-                body: Box::new(SetExpr::Select(Box::new(Select {
-                    distinct: None,
-                    top: None,
-                    projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions {
-                        opt_exclude: None,
-                        opt_except: None,
-                        opt_rename: None,
-                        opt_replace: None,
-                    })],
-                    into: None,
-                    from: vec![],
-                    lateral_views: vec![],
-                    selection: Some(Expr::Value(Value::Number("1".to_string(), true))),
-                    group_by: GroupByExpr::Expressions(vec![]),
-                    cluster_by: vec![],
-                    distribute_by: vec![],
-                    sort_by: vec![],
-                    having: None,
-                    named_window: vec![],
-                    qualify: None,
-                }))),
-                with: None,
-                order_by: vec![],
-                limit: None,
-                limit_by: vec![],
-                offset: None,
-                fetch: None,
-                locks: vec![],
-                for_clause: None,
-            })),
-            partitioned: None,
-            after_columns: vec![],
-            table: false,
-            on: None,
-            returning: None,
-            replace_into: false,
-            priority: None,
-        };
+    mod convert_db_path_to_fs_path {
+        use super::*;
 
-        let compiled = blah.to_string();
+        #[test]
+        fn simple() {
+            let executor = TreeQLiteExecutor::new(Config {
+                root_path: Utf8UnixPathBuf::from("/home/user"),
+            });
 
-        println!("Compiled: {}", compiled);
+            let fs_path = executor
+                .convert_db_path_to_fs_path("~/books/things")
+                .unwrap();
+
+            assert_eq!(fs_path, "/home/user/books/things");
+        }
     }
 
-    mod translator {
+    mod execute_query {
         use super::*;
-        use sqlformat::{FormatOptions, QueryParams};
+        use crate::common::split_by_line_and_trim_spaces;
         use std::collections::BTreeMap;
 
         #[derive(serde::Serialize)]
         struct Report {
-            database_names: Option<BTreeMap<String, String>>,
-            translated_query: Result<Vec<Vec<String>>, String>,
+            db_paths_by_reference: Result<BTreeMap<String, String>, String>,
             original_query: Vec<String>,
         }
 
         fn generate_report(sql: &str) -> Report {
-            let translate_result = translate_sql(sql);
+            let executor = TreeQLiteExecutor::new(Config {
+                root_path: Utf8UnixPathBuf::from("./test-db"),
+            });
+
+            let result = executor.execute_query(sql);
 
             let original_query = split_by_line_and_trim_spaces(sql);
 
-            if let Ok(TranslatedQuery { databases, query }) = &translate_result {
-                Report {
-                    database_names: Some(
-                        databases
-                            .into_iter()
-                            .map(|(k, v)| (k.clone(), v.clone()))
-                            .collect(),
-                    ),
-                    translated_query: Ok(query
-                        .into_iter()
-                        .map(|s| {
-                            split_by_line_and_trim_spaces(&sqlformat::format(
-                                &s,
-                                &QueryParams::None,
-                                FormatOptions::default(),
-                            ))
-                        })
-                        .collect()),
-                    original_query,
-                }
-            } else {
-                Report {
-                    database_names: None,
-                    translated_query: Err(translate_result.unwrap_err()),
-                    original_query,
-                }
+            Report {
+                db_paths_by_reference: result.map(|v| v.into_iter().collect()),
+                original_query,
             }
         }
 
