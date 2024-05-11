@@ -19,3 +19,6 @@ pkg-nodejs/
 
 # Coverage info for VS Code gutters
 lcov.info
+
+# Temporary test database
+test-db/

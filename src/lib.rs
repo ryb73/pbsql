@@ -4,7 +4,7 @@ mod path_convertor;
 mod reference_extractor;
 mod sql_ast_traversal;
 mod tql_validator;
-mod treeqlite;
+pub mod treeqlite;
 
 use object_name_replacer::{ObjectNameReplacer, ObjectNamesToReplace};
 use path_convertor::DatabaseNamesByPath;
