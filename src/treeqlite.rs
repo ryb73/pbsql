@@ -86,8 +86,8 @@ impl TreeQLiteExecutor {
         }
 
         let db_paths_by_reference = databases
-            .iter()
-            .map(|(k, v)| (v.to_owned(), k.to_owned()))
+            .into_iter()
+            .map(|(k, v)| (v, k))
             .collect::<HashMap<_, _>>();
 
         let qualified_fs_paths_by_reference = db_paths_by_reference
