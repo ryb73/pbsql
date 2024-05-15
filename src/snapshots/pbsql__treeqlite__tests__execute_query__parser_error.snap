@@ -4,6 +4,7 @@ expression: report
 ---
 dumps_by_path:
   Err: "sql parser error: Unterminated string literal at Line: 3, Column 62"
+rows_changed: -9223372036854775808
 original_query:
   - "INSERT INTO \"~/books/matches\" (\"id\", \"loserId\", \"winnerId\", \"matchDate\")"
   - "VALUES (?, ?, DATETIME('now'), CURRENT_TIMESTAMP('derp))"

@@ -14,5 +14,6 @@ dumps_by_path:
       - );
       - CREATE INDEX tbl_scoreIndex ON table_contents(score);
       - COMMIT;
+rows_changed: 0
 original_query:
   - "CREATE INDEX \"scoreIndex\" ON \"~/books/eloScores\" (score)"

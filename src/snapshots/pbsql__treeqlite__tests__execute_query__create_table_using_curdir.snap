@@ -18,6 +18,7 @@ dumps_by_path:
       - "  \"title\" TEXT NOT NULL"
       - );
       - COMMIT;
+rows_changed: 0
 original_query:
   - "CREATE TABLE IF NOT EXISTS \"~/books/./things/.\" ("
   - "    \"excluded\" BOOLEAN NOT NULL DEFAULT FALSE,"

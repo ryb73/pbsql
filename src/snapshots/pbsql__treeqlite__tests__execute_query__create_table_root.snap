@@ -4,6 +4,7 @@ expression: report
 ---
 dumps_by_path:
   Err: "Path must start with ~/: /dev/null"
+rows_changed: -9223372036854775808
 original_query:
   - "CREATE TABLE IF NOT EXISTS \"/dev/null\" ("
   - "    \"excluded\" BOOLEAN NOT NULL DEFAULT FALSE,"

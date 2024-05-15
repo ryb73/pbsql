@@ -31,6 +31,7 @@ dumps_by_path:
       - VALUES
       - "('4592', 'looser', 'winner', 'tomorrow');"
       - COMMIT;
+rows_changed: 2
 original_query:
   - "INSERT INTO \"~/books/matches\" (\"id\", \"loserId\", \"winnerId\", \"matchDate\")"
   - "SELECT \"~/books/matches\".\"id\" || '2', \"loserId\", \"~/books/matches\".\"winnerId\", \"matchDate\" FROM \"~/books/matches\""

@@ -73,17 +73,20 @@ impl TreeQLiteExecutor {
         Ok(joined_path.to_string().into())
     }
 
-    pub fn execute_query(&self, sql: &str) -> Result<HashMap<String, String>, String> {
+    fn translate_query_and_resolve_paths(
+        &self,
+        sql: &str,
+    ) -> Result<(String, HashMap<String, String>), String> {
         let TranslatedQuery {
             databases,
-            query: translated_query,
+            query: mut translated_query,
         } = translate_sql(sql)?;
 
-        // TQL queries span multiple SQLite databases, and thus transactional safety
-        // can't be guaranteed. For that reason, we only allow one statement per query.
         if translated_query.len() > 1 {
             return Err("Only one statement is allowed".to_owned());
         }
+
+        let translated_query = translated_query.pop().ok_or("Query cannot be empty")?;
 
         let db_paths_by_reference = databases
             .into_iter()
@@ -98,6 +101,13 @@ impl TreeQLiteExecutor {
                 Ok((k, qualified_path))
             })
             .collect::<Result<HashMap<_, _>, String>>()?;
+
+        Ok((translated_query, qualified_fs_paths_by_reference))
+    }
+
+    pub fn execute_query(&self, sql: &str) -> Result<usize, String> {
+        let (translated_query, qualified_fs_paths_by_reference) =
+            self.translate_query_and_resolve_paths(sql)?;
 
         let sqlite_connection =
             if let Some(main_path) = qualified_fs_paths_by_reference.get("main") {
@@ -122,17 +132,13 @@ impl TreeQLiteExecutor {
             }
         }
 
-        for query in translated_query {
-            let mut prepared_statement = sqlite_connection
-                .prepare(&query)
-                .map_err(|e| format!("Error preparing statement: {}", e))?;
+        let mut prepared_statement = sqlite_connection
+            .prepare(&translated_query)
+            .map_err(|e| format!("Error preparing statement: {}", e))?;
 
-            prepared_statement
-                .execute([])
-                .map_err(|e| format!("Error executing statement: {}", e))?;
-        }
-
-        Ok(qualified_fs_paths_by_reference)
+        prepared_statement
+            .execute([])
+            .map_err(|e| format!("Error executing statement: {}", e))
     }
 }
 
@@ -196,6 +202,7 @@ mod tests {
         #[derive(Serialize)]
         struct Report {
             dumps_by_path: Result<BTreeMap<String, Vec<String>>, String>,
+            rows_changed: isize,
             original_query: Vec<String>,
         }
 
@@ -211,9 +218,11 @@ mod tests {
         }
 
         fn generate_report(executor: TreeQLiteExecutor, sql: &str) -> Report {
-            let result = executor.execute_query(sql);
+            let rows_changed = executor.execute_query(sql);
 
-            let dumps_by_path = result.map(|db_paths_by_reference| {
+            let translate_and_resolve_result = executor.translate_query_and_resolve_paths(sql);
+
+            let dumps_by_path = translate_and_resolve_result.map(|(_, db_paths_by_reference)| {
                 db_paths_by_reference
                     .into_values()
                     .map(|path| {
@@ -229,6 +238,7 @@ mod tests {
 
             Report {
                 dumps_by_path,
+                rows_changed: rows_changed.map(|n| n as isize).unwrap_or(isize::MIN),
                 original_query,
             }
         }
