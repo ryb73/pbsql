@@ -1,0 +1,8 @@
+---
+source: src/treeqlite.rs
+expression: report
+---
+dumps_by_path:
+  Err: "not implemented: Statement::Close"
+original_query:
+  - close my_eyes;

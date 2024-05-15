@@ -1,0 +1,8 @@
+---
+source: src/treeqlite.rs
+expression: report
+---
+dumps_by_path:
+  Err: "Expected 1 identifiers for the table name, got: [\"x\", \"y\"]"
+original_query:
+  - CREATE INDEX a ON x.y (score)

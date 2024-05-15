@@ -4,7 +4,7 @@ expression: report
 ---
 dumps_by_path:
   Ok:
-    "./test-db/create_table/books/things.tql.sqlite3":
+    "./test-db/create_table_using_curdir/books/things.tql.sqlite3":
       - PRAGMA foreign_keys = OFF;
       - BEGIN
       - TRANSACTION;
@@ -19,7 +19,7 @@ dumps_by_path:
       - );
       - COMMIT;
 original_query:
-  - "CREATE TABLE IF NOT EXISTS \"~/books/things\" ("
+  - "CREATE TABLE IF NOT EXISTS \"~/books/./things/.\" ("
   - "    \"excluded\" BOOLEAN NOT NULL DEFAULT FALSE,"
   - "    \"externalLink\" TEXT NOT NULL,"
   - "    \"externalLinkTitle\" TEXT NOT NULL,"
@@ -27,4 +27,4 @@ original_query:
   - "    \"imageUrl\" TEXT NOT NULL,"
   - "    \"subtitle\" TEXT NULL,"
   - "    \"title\" TEXT NOT NULL"
-  - );
+  - )

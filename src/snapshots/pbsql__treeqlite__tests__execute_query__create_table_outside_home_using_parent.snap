@@ -1,0 +1,16 @@
+---
+source: src/treeqlite.rs
+expression: report
+---
+dumps_by_path:
+  Err: "Path must start with ~/: etc/passwd"
+original_query:
+  - "CREATE TABLE IF NOT EXISTS \"~/hi/../../etc/passwd\" ("
+  - "    \"excluded\" BOOLEAN NOT NULL DEFAULT FALSE,"
+  - "    \"externalLink\" TEXT NOT NULL,"
+  - "    \"externalLinkTitle\" TEXT NOT NULL,"
+  - "    \"id\" TEXT PRIMARY KEY NOT NULL,"
+  - "    \"imageUrl\" TEXT NOT NULL,"
+  - "    \"subtitle\" TEXT NULL,"
+  - "    \"title\" TEXT NOT NULL"
+  - )

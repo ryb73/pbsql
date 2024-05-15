@@ -79,6 +79,12 @@ impl TreeQLiteExecutor {
             query: translated_query,
         } = translate_sql(sql)?;
 
+        // TQL queries span multiple SQLite databases, and thus transactional safety
+        // can't be guaranteed. For that reason, we only allow one statement per query.
+        if translated_query.len() > 1 {
+            return Err("Only one statement is allowed".to_owned());
+        }
+
         let db_paths_by_reference = databases
             .iter()
             .map(|(k, v)| (v.to_owned(), k.to_owned()))
@@ -185,7 +191,7 @@ mod tests {
 
         use super::*;
         use crate::common::split_by_line_and_trim_spaces;
-        use std::{collections::BTreeMap, path::Path};
+        use std::{collections::BTreeMap, fs::remove_dir_all, path::Path};
 
         #[derive(Serialize)]
         struct Report {
@@ -193,16 +199,18 @@ mod tests {
             original_query: Vec<String>,
         }
 
-        fn generate_report(test_path: &str, sql: &str) -> Report {
+        fn make_executor(test_path: &str) -> TreeQLiteExecutor {
             let root_path = Utf8NativePathBuf::from("./test-db").join(test_path);
 
             // Delete the path to start fresh
             if AsRef::<Path>::as_ref(&root_path).exists() {
-                std::fs::remove_dir_all(&root_path).unwrap();
+                remove_dir_all(&root_path).unwrap();
             }
 
-            let executor = TreeQLiteExecutor::new(Config { root_path });
+            TreeQLiteExecutor::new(Config { root_path })
+        }
 
+        fn generate_report(executor: TreeQLiteExecutor, sql: &str) -> Report {
             let result = executor.execute_query(sql);
 
             let dumps_by_path = result.map(|db_paths_by_reference| {
@@ -237,209 +245,242 @@ mod tests {
                     "subtitle" TEXT NULL,
                     "title" TEXT NOT NULL
                 );
-                INSERT INTO "~/books/things" ("id", "title", "imageUrl", "externalLink", "externalLinkTitle")
-                    VALUES ('1', 'The Great Gatsby', 'https://example.com/gatsby.jpg', 'https://example.com/gatsby', 'Gatsby'),
-                    ('2', 'The Catcher in the Rye', 'https://example.com/catcher.jpg', 'https://example.com/catcher', 'Catcher'),
-                    ('3', 'To Kill a Mockingbird', 'https://example.com/mockingbird.jpg', 'https://example.com/mockingbird', 'Mockingbird');
             "#;
 
-            let report = generate_report("create_table", sql);
+            let report = generate_report(make_executor("create_table"), sql);
+            insta::assert_yaml_snapshot!(report);
+        }
+
+        #[test]
+        fn create_table_using_parent() {
+            let sql = r#"
+            CREATE TABLE IF NOT EXISTS "~/books/bings/../things" (
+                "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
+                "externalLink" TEXT NOT NULL,
+                "externalLinkTitle" TEXT NOT NULL,
+                "id" TEXT PRIMARY KEY NOT NULL,
+                "imageUrl" TEXT NOT NULL,
+                "subtitle" TEXT NULL,
+                "title" TEXT NOT NULL
+            )
+        "#;
+
+            let report = generate_report(make_executor("create_table_using_parent"), sql);
+            insta::assert_yaml_snapshot!(report);
+        }
+
+        #[test]
+        fn create_table_using_curdir() {
+            let sql = r#"
+            CREATE TABLE IF NOT EXISTS "~/books/./things/." (
+                "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
+                "externalLink" TEXT NOT NULL,
+                "externalLinkTitle" TEXT NOT NULL,
+                "id" TEXT PRIMARY KEY NOT NULL,
+                "imageUrl" TEXT NOT NULL,
+                "subtitle" TEXT NULL,
+                "title" TEXT NOT NULL
+            )
+        "#;
+
+            let report = generate_report(make_executor("create_table_using_curdir"), sql);
+            insta::assert_yaml_snapshot!(report);
+        }
+
+        #[test]
+        fn create_table_disallow_compound_identifier() {
+            let sql = r#"
+            CREATE TABLE IF NOT EXISTS x.y (
+                "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
+                "externalLink" TEXT NOT NULL,
+                "externalLinkTitle" TEXT NOT NULL,
+                "id" TEXT PRIMARY KEY NOT NULL,
+                "imageUrl" TEXT NOT NULL,
+                "subtitle" TEXT NULL,
+                "title" TEXT NOT NULL
+            )
+        "#;
+
+            let report = generate_report(
+                make_executor("create_table_disallow_compound_identifier"),
+                sql,
+            );
+            insta::assert_yaml_snapshot!(report);
+        }
+
+        #[test]
+        fn unsupported_statement_type() {
+            let sql = r#"close my_eyes;"#;
+
+            let report = generate_report(make_executor("unsupported_statement_type"), sql);
+            insta::assert_yaml_snapshot!(report);
+        }
+
+        #[test]
+        fn create_table_outside_home() {
+            let sql = r#"
+            CREATE TABLE IF NOT EXISTS "sasas" (
+                "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
+                "externalLink" TEXT NOT NULL,
+                "externalLinkTitle" TEXT NOT NULL,
+                "id" TEXT PRIMARY KEY NOT NULL,
+                "imageUrl" TEXT NOT NULL,
+                "subtitle" TEXT NULL,
+                "title" TEXT NOT NULL
+            )
+        "#;
+
+            let report = generate_report(make_executor("create_table_outside_home"), sql);
+            insta::assert_yaml_snapshot!(report);
+        }
+
+        #[test]
+        fn create_table_root() {
+            let sql = r#"
+            CREATE TABLE IF NOT EXISTS "/dev/null" (
+                "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
+                "externalLink" TEXT NOT NULL,
+                "externalLinkTitle" TEXT NOT NULL,
+                "id" TEXT PRIMARY KEY NOT NULL,
+                "imageUrl" TEXT NOT NULL,
+                "subtitle" TEXT NULL,
+                "title" TEXT NOT NULL
+            )
+        "#;
+
+            let report = generate_report(make_executor("create_table_root"), sql);
+            insta::assert_yaml_snapshot!(report);
+        }
+
+        #[test]
+        fn create_table_outside_home_using_parent() {
+            let sql = r#"
+            CREATE TABLE IF NOT EXISTS "~/hi/../../etc/passwd" (
+                "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
+                "externalLink" TEXT NOT NULL,
+                "externalLinkTitle" TEXT NOT NULL,
+                "id" TEXT PRIMARY KEY NOT NULL,
+                "imageUrl" TEXT NOT NULL,
+                "subtitle" TEXT NULL,
+                "title" TEXT NOT NULL
+            )
+        "#;
+
+            let report =
+                generate_report(make_executor("create_table_outside_home_using_parent"), sql);
+            insta::assert_yaml_snapshot!(report);
+        }
+
+        #[test]
+        fn create_index() {
+            let executor = make_executor("create_index");
+
+            executor
+                .execute_query(
+                    r#"
+                        CREATE TABLE IF NOT EXISTS "~/books/eloScores" (
+                            thing_id INTEGER PRIMARY KEY NOT NULL,
+                            score INT NOT NULL,
+                        );
+                    "#,
+                )
+                .unwrap();
+
+            let sql = r#"CREATE INDEX "scoreIndex" ON "~/books/eloScores" (score)"#;
+
+            let report = generate_report(executor, sql);
+            insta::assert_yaml_snapshot!(report);
+        }
+
+        #[test]
+        fn create_index_compound_name() {
+            let sql = r#"CREATE INDEX a.b ON "~/books/eloScores" (score)"#;
+
+            let report = generate_report(make_executor("create_index_compound_name"), sql);
+            insta::assert_yaml_snapshot!(report);
+        }
+
+        #[test]
+        fn create_index_compound_table_name() {
+            let sql = r#"CREATE INDEX a ON x.y (score)"#;
+
+            let report = generate_report(make_executor("create_index_compound_table_name"), sql);
             insta::assert_yaml_snapshot!(report);
         }
 
         // #[test]
-        // fn create_table_using_parent() {
-        //     let sql = r#"
-        //     CREATE TABLE IF NOT EXISTS "~/books/bings/../things" (
-        //         "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
-        //         "externalLink" TEXT NOT NULL,
-        //         "externalLinkTitle" TEXT NOT NULL,
-        //         "id" TEXT PRIMARY KEY NOT NULL,
-        //         "imageUrl" TEXT NOT NULL,
-        //         "subtitle" TEXT NULL,
-        //         "title" TEXT NOT NULL
-        //     )
-        // "#;
-
-        //     let report = generate_report(sql);
-        //     insta::assert_yaml_snapshot!(report);
-        // }
-
-        // #[test]
-        // fn create_table_using_curdir() {
-        //     let sql = r#"
-        //     CREATE TABLE IF NOT EXISTS "~/books/./things/." (
-        //         "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
-        //         "externalLink" TEXT NOT NULL,
-        //         "externalLinkTitle" TEXT NOT NULL,
-        //         "id" TEXT PRIMARY KEY NOT NULL,
-        //         "imageUrl" TEXT NOT NULL,
-        //         "subtitle" TEXT NULL,
-        //         "title" TEXT NOT NULL
-        //     )
-        // "#;
-
-        //     let report = generate_report(sql);
-        //     insta::assert_yaml_snapshot!(report);
-        // }
-
-        // #[test]
-        // fn create_table_disallow_compound_identifier() {
-        //     let sql = r#"
-        //     CREATE TABLE IF NOT EXISTS x.y (
-        //         "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
-        //         "externalLink" TEXT NOT NULL,
-        //         "externalLinkTitle" TEXT NOT NULL,
-        //         "id" TEXT PRIMARY KEY NOT NULL,
-        //         "imageUrl" TEXT NOT NULL,
-        //         "subtitle" TEXT NULL,
-        //         "title" TEXT NOT NULL
-        //     )
-        // "#;
-
-        //     let report = generate_report(sql);
-        //     insta::assert_yaml_snapshot!(report);
-        // }
-
-        // #[test]
-        // fn unsupported_statement_type() {
-        //     let sql = r#"close my_eyes;"#;
-
-        //     let report = generate_report(sql);
-        //     insta::assert_yaml_snapshot!(report);
-        // }
-
-        // #[test]
-        // fn create_table_outside_home() {
-        //     let sql = r#"
-        //     CREATE TABLE IF NOT EXISTS "sasas" (
-        //         "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
-        //         "externalLink" TEXT NOT NULL,
-        //         "externalLinkTitle" TEXT NOT NULL,
-        //         "id" TEXT PRIMARY KEY NOT NULL,
-        //         "imageUrl" TEXT NOT NULL,
-        //         "subtitle" TEXT NULL,
-        //         "title" TEXT NOT NULL
-        //     )
-        // "#;
-
-        //     let report = generate_report(sql);
-        //     insta::assert_yaml_snapshot!(report);
-        // }
-
-        // #[test]
-        // fn create_table_root() {
-        //     let sql = r#"
-        //     CREATE TABLE IF NOT EXISTS "/dev/null" (
-        //         "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
-        //         "externalLink" TEXT NOT NULL,
-        //         "externalLinkTitle" TEXT NOT NULL,
-        //         "id" TEXT PRIMARY KEY NOT NULL,
-        //         "imageUrl" TEXT NOT NULL,
-        //         "subtitle" TEXT NULL,
-        //         "title" TEXT NOT NULL
-        //     )
-        // "#;
-
-        //     let report = generate_report(sql);
-        //     insta::assert_yaml_snapshot!(report);
-        // }
-
-        // #[test]
-        // fn create_table_outside_home_using_parent() {
-        //     let sql = r#"
-        //     CREATE TABLE IF NOT EXISTS "~/hi/../../etc/passwd" (
-        //         "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
-        //         "externalLink" TEXT NOT NULL,
-        //         "externalLinkTitle" TEXT NOT NULL,
-        //         "id" TEXT PRIMARY KEY NOT NULL,
-        //         "imageUrl" TEXT NOT NULL,
-        //         "subtitle" TEXT NULL,
-        //         "title" TEXT NOT NULL
-        //     )
-        // "#;
-
-        //     let report = generate_report(sql);
-        //     insta::assert_yaml_snapshot!(report);
-        // }
-
-        // #[test]
-        // fn create_table_multiple() {
-        //     let sql = r#"
-        //     CREATE TABLE IF NOT EXISTS "~/books/things" (
-        //         "excluded" BOOLEAN NOT NULL DEFAULT FALSE,
-        //         "externalLink" TEXT NOT NULL,
-        //         "externalLinkTitle" TEXT NOT NULL,
-        //         "id" TEXT PRIMARY KEY NOT NULL,
-        //         "imageUrl" TEXT NOT NULL,
-        //         "subtitle" TEXT NULL,
-        //         "title" TEXT NOT NULL
-        //     );
-        //     CREATE TABLE IF NOT EXISTS "~/books/thongs" (
-        //         "title" TEXT NOT NULL
-        //     );
-        // "#;
-
-        //     let report = generate_report(sql);
-        //     insta::assert_yaml_snapshot!(report);
-        // }
-
-        // #[test]
-        // fn create_index() {
-        //     let sql = r#"CREATE INDEX "scoreIndex" ON "~/books/eloScores" (score)"#;
-
-        //     let report = generate_report(sql);
-        //     insta::assert_yaml_snapshot!(report);
-        // }
-
-        // #[test]
-        // fn create_index_compound_name() {
-        //     let sql = r#"CREATE INDEX a.b ON "~/books/eloScores" (score)"#;
-
-        //     let report = generate_report(sql);
-        //     insta::assert_yaml_snapshot!(report);
-        // }
-
-        // #[test]
-        // fn create_index_compound_table_name() {
-        //     let sql = r#"CREATE INDEX a ON x.y (score)"#;
-
-        //     let report = generate_report(sql);
-        //     insta::assert_yaml_snapshot!(report);
-        // }
-
-        // #[test]
         // fn insert() {
-        //     let sql = r#"
-        //     INSERT INTO "~/books/matches" ("id", "loserId", "winnerId", "matchDate")
-        //     VALUES (?, ?, DATETIME('now'), CURRENT_TIMESTAMP)
-        // "#;
+        //     let executor = make_executor("insert");
 
-        //     let report = generate_report(sql);
+        //     executor
+        //         .execute_query(
+        //             r#"
+        //                 CREATE TABLE IF NOT EXISTS "~/books/matches" (
+        //                     "id" TEXT PRIMARY KEY NOT NULL,
+        //                     "loserId" TEXT NOT NULL,
+        //                     "winnerId" TEXT NOT NULL,
+        //                     "matchDate" TEXT NOT NULL
+        //                 );
+        //             "#,
+        //         )
+        //         .unwrap();
+
+        //     let sql = r#"
+        //         INSERT INTO "~/books/matches" ("id", "loserId", "winnerId", "matchDate")
+        //         VALUES (?, ?, DATETIME('now'), CURRENT_TIMESTAMP)
+        //     "#;
+
+        //     let report = generate_report(executor, sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
-        // #[test]
-        // fn insert_from_select() {
-        //     let sql = r#"
-        //     INSERT INTO "~/books/matches" ("id", "loserId", "winnerId", "matchDate")
-        //     SELECT "~/books/matches"."id" || '2', "loserId", "~/books/matches"."winnerId", "matchDate" FROM "~/books/matches"
-        // "#;
+        #[test]
+        fn insert_from_select() {
+            let executor = make_executor("insert_from_select");
 
-        //     let report = generate_report(sql);
-        //     insta::assert_yaml_snapshot!(report);
-        // }
+            executor
+                .execute_query(
+                    r#"
+                        CREATE TABLE IF NOT EXISTS "~/books/matches" (
+                            "id" TEXT PRIMARY KEY NOT NULL,
+                            "loserId" TEXT NOT NULL,
+                            "winnerId" TEXT NOT NULL,
+                            "matchDate" TEXT NOT NULL
+                        );
+                    "#,
+                )
+                .unwrap();
 
-        // #[test]
-        // fn parser_error() {
-        //     let sql = r#"
-        //     INSERT INTO "~/books/matches" ("id", "loserId", "winnerId", "matchDate")
-        //     VALUES (?, ?, DATETIME('now'), CURRENT_TIMESTAMP('derp))
-        // "#;
+            executor
+                .execute_query(
+                    r#"
+                        INSERT INTO "~/books/matches" ("id", "loserId", "winnerId", "matchDate")
+                        VALUES
+                            ("heyyuy", "loser", "weener", "today"),
+                            ("459", "looser", "winner", "tomorrow")
+                    "#,
+                )
+                .unwrap();
 
-        //     let report = generate_report(sql);
-        //     insta::assert_yaml_snapshot!(report);
-        // }
+            let sql = r#"
+                INSERT INTO "~/books/matches" ("id", "loserId", "winnerId", "matchDate")
+                SELECT "~/books/matches"."id" || '2', "loserId", "~/books/matches"."winnerId", "matchDate" FROM "~/books/matches"
+            "#;
+
+            let report = generate_report(executor, sql);
+            insta::assert_yaml_snapshot!(report);
+        }
+
+        #[test]
+        fn parser_error() {
+            let sql = r#"
+            INSERT INTO "~/books/matches" ("id", "loserId", "winnerId", "matchDate")
+            VALUES (?, ?, DATETIME('now'), CURRENT_TIMESTAMP('derp))
+        "#;
+
+            let report = generate_report(make_executor("parser_error"), sql);
+            insta::assert_yaml_snapshot!(report);
+        }
 
         // #[test]
         // fn select1_with_alias() {
@@ -452,7 +493,7 @@ mod tests {
         //     LIMIT 1
         // "#;
 
-        //     let report = generate_report(sql);
+        //     let report = generate_report(make_executor("select1_with_alias"), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
@@ -468,7 +509,7 @@ mod tests {
         //     LIMIT 1
         // "#;
 
-        //     let report = generate_report(sql);
+        //     let report = generate_report(make_executor("select1"), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
@@ -484,7 +525,7 @@ mod tests {
         //         AND loser.thing_id = ?
         // "#;
 
-        //     let report = generate_report(sql);
+        //     let report = generate_report(make_executor("select_with_join"), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
@@ -492,7 +533,7 @@ mod tests {
         // fn select_null() {
         //     let sql = "SELECT null";
 
-        //     let report = generate_report(sql);
+        //     let report = generate_report(make_executor("select_null"), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
@@ -500,7 +541,7 @@ mod tests {
         // fn update() {
         //     let sql = r#"UPDATE "~/books/eloScores" SET "score" = ? WHERE "thingId" = ?"#;
 
-        //     let report = generate_report(sql);
+        //     let report = generate_report(make_executor("update"), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
@@ -518,7 +559,7 @@ mod tests {
         //     )
         // "#;
 
-        //     let report = generate_report(sql);
+        //     let report = generate_report(make_executor("subquery"), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
@@ -552,7 +593,7 @@ mod tests {
         //     LIMIT ?
         // "#;
 
-        //     let report = generate_report(sql);
+        //     let report = generate_report(make_executor("union_in_subquery"), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
@@ -560,7 +601,7 @@ mod tests {
         // fn unsupported_function() {
         //     let sql = "SELECT badfunc()";
 
-        //     let report = generate_report(sql);
+        //     let report = generate_report(make_executor("unsupported_function"), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
@@ -586,38 +627,38 @@ mod tests {
         //     LIMIT ? OFFSET ?
         // "#;
 
-        //     let report = generate_report(sql);
+        //     let report = generate_report(make_executor("another_select"), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
         // #[test]
         // fn and_another() {
         //     let sql = r#"
-        //     select "id"
-        //     from (
-        //         select
-        //             "~/books/things"."id" as "id",
-        //             0 as "num_matches" from "~/books/things"
-        //         left join "~/books/matches" on (
-        //             "~/books/matches"."winner_id" = "~/books/things"."id"
-        //             or "~/books/matches"."loser_id" = "~/books/things"."id"
-        //         )
-        //         where "~/books/matches"."loser_id" is null
+        //         select "id"
+        //         from (
+        //             select
+        //                 "~/books/things"."id" as "id",
+        //                 0 as "num_matches" from "~/books/things"
+        //             left join "~/books/matches" on (
+        //                 "~/books/matches"."winner_id" = "~/books/things"."id"
+        //                 or "~/books/matches"."loser_id" = "~/books/things"."id"
+        //             )
+        //             where "~/books/matches"."loser_id" is null
 
-        //         union all
+        //             union all
 
-        //         select "winner_id" as "id", 1 as "num_matches" from "~/books/matches"
+        //             select "winner_id" as "id", 1 as "num_matches" from "~/books/matches"
 
-        //         union all
+        //             union all
 
-        //         select "loser_id" as "id", 1 as "num_matches" from "~/books/matches"
-        //     ) as "sq"
-        //     group by "id"
-        //     order by sum("num_matches")
-        //     limit ?
-        // "#;
+        //             select "loser_id" as "id", 1 as "num_matches" from "~/books/matches"
+        //         ) as "sq"
+        //         group by "id"
+        //         order by sum("num_matches")
+        //         limit ?
+        //     "#;
 
-        //     let report = generate_report(sql);
+        //     let report = generate_report(make_executor("and_another"), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
@@ -625,23 +666,18 @@ mod tests {
         // fn select_wildcard() {
         //     let sql = r#"select * from "~/heyy""#;
 
-        //     let report = generate_report(sql);
+        //     let report = generate_report(make_executor("select_wildcard"), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
         // #[test]
         // fn drop_table() {
-        //     let sql = r#"drop table "~/heyy""#;
+        //     let sql = r#"
+        //         create table "~/heyy" ("id" text primary key not null);
+        //         drop table "~/heyy"
+        //     "#;
 
-        //     let report = generate_report(sql);
-        //     insta::assert_yaml_snapshot!(report);
-        // }
-
-        // #[test]
-        // fn drop_multiple_tables() {
-        //     let sql = r#"drop table "~/heyy", "~/okokok""#;
-
-        //     let report = generate_report(sql);
+        //     let report = generate_report(make_executor("drop_table"), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
@@ -654,7 +690,7 @@ mod tests {
         //     on conflict do nothing
         // "#;
 
-        //     let report = generate_report(sql);
+        //     let report = generate_report(make_executor("on_conflict_do_nothing"), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
@@ -670,7 +706,7 @@ mod tests {
         //     from "~/books/things"
         // "#;
 
-        //     let report = generate_report(sql);
+        //     let report = generate_report(make_executor("union_separate_scopes"), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
     }
