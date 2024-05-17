@@ -1,0 +1,23 @@
+---
+source: src/treeqlite.rs
+expression: report
+---
+dumps_by_path:
+  "./test-db/update_with_match/books/eloScores.tql.sqlite3":
+    - PRAGMA foreign_keys = OFF;
+    - BEGIN
+    - TRANSACTION;
+    - CREATE TABLE table_contents (
+    - "  \"thingId\" TEXT PRIMARY KEY NOT NULL,"
+    - "  \"score\" INT NOT NULL"
+    - );
+    - INSERT INTO
+    - "  table_contents"
+    - VALUES
+    - "('thing1', 100);"
+    - COMMIT;
+rows_changed_or_error:
+  Ok: 1
+original_query:
+  - "UPDATE \"~/books/eloScores\" SET \"score\" = ? WHERE \"thingId\" = ?"
+params: "[100,\"thing1\"]"

@@ -193,6 +193,7 @@ mod tests {
     mod execute_query {
         use super::*;
         use crate::common::split_by_line_and_trim_spaces;
+        use function_name::named;
         use rusqlite::params;
         use std::{collections::BTreeMap, fs::remove_dir_all, path::Path};
         use typed_path::Utf8NativePathBuf;
@@ -249,6 +250,7 @@ mod tests {
         }
 
         #[test]
+        #[named]
         fn create_table() {
             let sql = r#"
                 CREATE TABLE IF NOT EXISTS "~/books/things" (
@@ -262,11 +264,12 @@ mod tests {
                 );
             "#;
 
-            let report = generate_report(make_executor("create_table"), sql, ());
+            let report = generate_report(make_executor(function_name!()), sql, ());
             insta::assert_yaml_snapshot!(report);
         }
 
         #[test]
+        #[named]
         fn create_table_using_parent() {
             let sql = r#"
             CREATE TABLE IF NOT EXISTS "~/books/bings/../things" (
@@ -280,11 +283,12 @@ mod tests {
             )
         "#;
 
-            let report = generate_report(make_executor("create_table_using_parent"), sql, ());
+            let report = generate_report(make_executor(function_name!()), sql, ());
             insta::assert_yaml_snapshot!(report);
         }
 
         #[test]
+        #[named]
         fn create_table_using_curdir() {
             let sql = r#"
             CREATE TABLE IF NOT EXISTS "~/books/./things/." (
@@ -298,11 +302,12 @@ mod tests {
             )
         "#;
 
-            let report = generate_report(make_executor("create_table_using_curdir"), sql, ());
+            let report = generate_report(make_executor(function_name!()), sql, ());
             insta::assert_yaml_snapshot!(report);
         }
 
         #[test]
+        #[named]
         fn create_table_disallow_compound_identifier() {
             let sql = r#"
             CREATE TABLE IF NOT EXISTS x.y (
@@ -316,23 +321,21 @@ mod tests {
             )
         "#;
 
-            let report = generate_report(
-                make_executor("create_table_disallow_compound_identifier"),
-                sql,
-                (),
-            );
+            let report = generate_report(make_executor(function_name!()), sql, ());
             insta::assert_yaml_snapshot!(report);
         }
 
         #[test]
+        #[named]
         fn unsupported_statement_type() {
             let sql = r#"close my_eyes;"#;
 
-            let report = generate_report(make_executor("unsupported_statement_type"), sql, ());
+            let report = generate_report(make_executor(function_name!()), sql, ());
             insta::assert_yaml_snapshot!(report);
         }
 
         #[test]
+        #[named]
         fn create_table_outside_home() {
             let sql = r#"
             CREATE TABLE IF NOT EXISTS "sasas" (
@@ -346,11 +349,12 @@ mod tests {
             )
         "#;
 
-            let report = generate_report(make_executor("create_table_outside_home"), sql, ());
+            let report = generate_report(make_executor(function_name!()), sql, ());
             insta::assert_yaml_snapshot!(report);
         }
 
         #[test]
+        #[named]
         fn create_table_root() {
             let sql = r#"
             CREATE TABLE IF NOT EXISTS "/dev/null" (
@@ -364,11 +368,12 @@ mod tests {
             )
         "#;
 
-            let report = generate_report(make_executor("create_table_root"), sql, ());
+            let report = generate_report(make_executor(function_name!()), sql, ());
             insta::assert_yaml_snapshot!(report);
         }
 
         #[test]
+        #[named]
         fn create_table_outside_home_using_parent() {
             let sql = r#"
             CREATE TABLE IF NOT EXISTS "~/hi/../../etc/passwd" (
@@ -382,17 +387,14 @@ mod tests {
             )
         "#;
 
-            let report = generate_report(
-                make_executor("create_table_outside_home_using_parent"),
-                sql,
-                (),
-            );
+            let report = generate_report(make_executor(function_name!()), sql, ());
             insta::assert_yaml_snapshot!(report);
         }
 
         #[test]
+        #[named]
         fn create_index() {
-            let executor = make_executor("create_index");
+            let executor = make_executor(function_name!());
 
             executor
                 .execute_query(
@@ -413,25 +415,27 @@ mod tests {
         }
 
         #[test]
+        #[named]
         fn create_index_compound_name() {
             let sql = r#"CREATE INDEX a.b ON "~/books/eloScores" (score)"#;
 
-            let report = generate_report(make_executor("create_index_compound_name"), sql, ());
+            let report = generate_report(make_executor(function_name!()), sql, ());
             insta::assert_yaml_snapshot!(report);
         }
 
         #[test]
+        #[named]
         fn create_index_compound_table_name() {
             let sql = r#"CREATE INDEX a ON x.y (score)"#;
 
-            let report =
-                generate_report(make_executor("create_index_compound_table_name"), sql, ());
+            let report = generate_report(make_executor(function_name!()), sql, ());
             insta::assert_yaml_snapshot!(report);
         }
 
         #[test]
+        #[named]
         fn insert() {
-            let executor = make_executor("insert");
+            let executor = make_executor(function_name!());
 
             executor
                 .execute_query(
@@ -459,8 +463,9 @@ mod tests {
         }
 
         #[test]
+        #[named]
         fn insert_from_select() {
-            let executor = make_executor("insert_from_select");
+            let executor = make_executor(function_name!());
 
             executor
                 .execute_query(
@@ -500,13 +505,14 @@ mod tests {
         }
 
         #[test]
+        #[named]
         fn parser_error() {
             let sql = r#"
                 INSERT INTO "~/books/matches" ("id", "loserId", "winnerId", "matchDate")
                 VALUES (?, ?, DATETIME('now'), CURRENT_TIMESTAMP('derp))
             "#;
 
-            let report = generate_report(make_executor("parser_error"), sql, ());
+            let report = generate_report(make_executor(function_name!()), sql, ());
             insta::assert_yaml_snapshot!(report);
         }
 
@@ -521,7 +527,7 @@ mod tests {
         //     LIMIT 1
         // "#;
 
-        //     let report = generate_report(make_executor("select1_with_alias"), sql);
+        //     let report = generate_report(make_executor(function_name!()), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
@@ -537,7 +543,7 @@ mod tests {
         //     LIMIT 1
         // "#;
 
-        //     let report = generate_report(make_executor("select1"), sql);
+        //     let report = generate_report(make_executor(function_name!()), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
@@ -553,7 +559,7 @@ mod tests {
         //         AND loser.thing_id = ?
         // "#;
 
-        //     let report = generate_report(make_executor("select_with_join"), sql);
+        //     let report = generate_report(make_executor(function_name!()), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
@@ -561,17 +567,66 @@ mod tests {
         // fn select_null() {
         //     let sql = "SELECT null";
 
-        //     let report = generate_report(make_executor("select_null"), sql);
+        //     let report = generate_report(make_executor(function_name!()), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
-        // #[test]
-        // fn update() {
-        //     let sql = r#"UPDATE "~/books/eloScores" SET "score" = ? WHERE "thingId" = ?"#;
+        #[test]
+        #[named]
+        fn update_no_match() {
+            let executor = make_executor(function_name!());
 
-        //     let report = generate_report(make_executor("update"), sql);
-        //     insta::assert_yaml_snapshot!(report);
-        // }
+            executor
+                .execute_query(
+                    r#"
+                        CREATE TABLE IF NOT EXISTS "~/books/eloScores" (
+                            "thingId" TEXT PRIMARY KEY NOT NULL,
+                            "score" INT NOT NULL
+                        );
+                    "#,
+                    (),
+                )
+                .unwrap();
+
+            let report = generate_report(
+                executor,
+                r#"UPDATE "~/books/eloScores" SET "score" = ? WHERE "thingId" = ?"#,
+                (100, "thing1"),
+            );
+            insta::assert_yaml_snapshot!(report);
+        }
+
+        #[test]
+        #[named]
+        fn update_with_match() {
+            let executor = make_executor(function_name!());
+
+            executor
+                .execute_query(
+                    r#"
+                        CREATE TABLE IF NOT EXISTS "~/books/eloScores" (
+                            "thingId" TEXT PRIMARY KEY NOT NULL,
+                            "score" INT NOT NULL
+                        );
+                    "#,
+                    (),
+                )
+                .unwrap();
+
+            executor
+                .execute_query(
+                    r#"INSERT INTO "~/books/eloScores" ("thingId", "score") VALUES (?, ?)"#,
+                    ("thing1", 50),
+                )
+                .unwrap();
+
+            let report = generate_report(
+                executor,
+                r#"UPDATE "~/books/eloScores" SET "score" = ? WHERE "thingId" = ?"#,
+                (100, "thing1"),
+            );
+            insta::assert_yaml_snapshot!(report);
+        }
 
         // #[test]
         // fn subquery() {
@@ -587,7 +642,7 @@ mod tests {
         //     )
         // "#;
 
-        //     let report = generate_report(make_executor("subquery"), sql);
+        //     let report = generate_report(make_executor(function_name!()), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
@@ -621,7 +676,7 @@ mod tests {
         //     LIMIT ?
         // "#;
 
-        //     let report = generate_report(make_executor("union_in_subquery"), sql);
+        //     let report = generate_report(make_executor(function_name!()), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
@@ -629,7 +684,7 @@ mod tests {
         // fn unsupported_function() {
         //     let sql = "SELECT badfunc()";
 
-        //     let report = generate_report(make_executor("unsupported_function"), sql);
+        //     let report = generate_report(make_executor(function_name!()), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
@@ -655,7 +710,7 @@ mod tests {
         //     LIMIT ? OFFSET ?
         // "#;
 
-        //     let report = generate_report(make_executor("another_select"), sql);
+        //     let report = generate_report(make_executor(function_name!()), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
@@ -686,7 +741,7 @@ mod tests {
         //         limit ?
         //     "#;
 
-        //     let report = generate_report(make_executor("and_another"), sql);
+        //     let report = generate_report(make_executor(function_name!()), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
@@ -694,7 +749,7 @@ mod tests {
         // fn select_wildcard() {
         //     let sql = r#"select * from "~/heyy""#;
 
-        //     let report = generate_report(make_executor("select_wildcard"), sql);
+        //     let report = generate_report(make_executor(function_name!()), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
@@ -705,13 +760,14 @@ mod tests {
         //         drop table "~/heyy"
         //     "#;
 
-        //     let report = generate_report(make_executor("drop_table"), sql);
+        //     let report = generate_report(make_executor(function_name!()), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
 
         #[test]
+        #[named]
         fn on_conflict_do_nothing() {
-            let executor = make_executor("on_conflict_do_nothing");
+            let executor = make_executor(function_name!());
 
             executor
                 .execute_query(
@@ -776,7 +832,7 @@ mod tests {
         //     from "~/books/things"
         // "#;
 
-        //     let report = generate_report(make_executor("union_separate_scopes"), sql);
+        //     let report = generate_report(make_executor(function_name!()), sql);
         //     insta::assert_yaml_snapshot!(report);
         // }
     }
