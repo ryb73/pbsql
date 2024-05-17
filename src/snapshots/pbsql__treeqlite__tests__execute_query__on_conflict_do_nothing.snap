@@ -1,0 +1,35 @@
+---
+source: src/treeqlite.rs
+expression: report
+---
+dumps_by_path:
+  "./test-db/on_conflict_do_nothing/my-data-scraper/reelgood/shows-and-movies.tql.sqlite3":
+    - PRAGMA foreign_keys = OFF;
+    - BEGIN
+    - TRANSACTION;
+    - CREATE TABLE table_contents (
+    - "  \"format\" TEXT NOT NULL,"
+    - "  \"isWatched\" BOOLEAN NOT NULL,"
+    - "  \"name\" TEXT NOT NULL,"
+    - "  \"url\" TEXT PRIMARY KEY NOT NULL,"
+    - "  \"imageUrl\" TEXT NOT NULL"
+    - );
+    - INSERT INTO
+    - "  table_contents"
+    - VALUES
+    - (
+    - "    'movie',"
+    - "    1,"
+    - "    'The Matrix',"
+    - "    'https://reelgood.com/movie/the-matrix',"
+    - "    'https://reelgood.com/movie/the-matrix/image'"
+    - "  );"
+    - COMMIT;
+rows_changed_or_error:
+  Ok: 0
+original_query:
+  - "insert into \"~/my-data-scraper/reelgood/shows-and-movies\""
+  - "(\"format\", \"isWatched\", \"name\", \"url\", \"imageUrl\")"
+  - "values (?, ?, ?, ?, ?)"
+  - on conflict do nothing
+params: "[\"moovie\",false,\"overriiiiiide\",\"https://reelgood.com/movie/the-matrix\",\"https://reelgood.com/movie/the-matrix/no-image\"]"

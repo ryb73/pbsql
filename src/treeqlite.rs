@@ -1,10 +1,8 @@
 use super::translate_sql;
 use super::TranslatedQuery;
-use rusqlite::OpenFlags;
+use rusqlite::{OpenFlags, Params};
 use serde::Serialize;
-use std::collections::HashMap;
-use std::fs::create_dir_all;
-use std::path::PathBuf;
+use std::{collections::HashMap, fmt::Debug, fs::create_dir_all, path::PathBuf};
 use typed_path::Utf8NativePathBuf;
 
 pub struct Config {
@@ -105,7 +103,7 @@ impl TreeQLiteExecutor {
         Ok((translated_query, qualified_fs_paths_by_reference))
     }
 
-    pub fn execute_query(&self, sql: &str) -> Result<usize, String> {
+    pub fn execute_query<P: Params>(&self, sql: &str, params: P) -> Result<usize, String> {
         let (translated_query, qualified_fs_paths_by_reference) =
             self.translate_query_and_resolve_paths(sql)?;
 
@@ -137,7 +135,7 @@ impl TreeQLiteExecutor {
             .map_err(|e| format!("Error preparing statement: {}", e))?;
 
         prepared_statement
-            .execute([])
+            .execute(params)
             .map_err(|e| format!("Error executing statement: {}", e))
     }
 }
@@ -193,17 +191,18 @@ mod tests {
     }
 
     mod execute_query {
-        use typed_path::Utf8NativePathBuf;
-
         use super::*;
         use crate::common::split_by_line_and_trim_spaces;
+        use rusqlite::params;
         use std::{collections::BTreeMap, fs::remove_dir_all, path::Path};
+        use typed_path::Utf8NativePathBuf;
 
         #[derive(Serialize)]
         struct Report {
-            dumps_by_path: Result<BTreeMap<String, Vec<String>>, String>,
-            rows_changed: isize,
+            dumps_by_path: BTreeMap<String, Vec<String>>,
+            rows_changed_or_error: Result<usize, String>,
             original_query: Vec<String>,
+            params: String,
         }
 
         fn make_executor(test_path: &str) -> TreeQLiteExecutor {
@@ -217,29 +216,35 @@ mod tests {
             TreeQLiteExecutor::new(Config { root_path })
         }
 
-        fn generate_report(executor: TreeQLiteExecutor, sql: &str) -> Report {
-            let rows_changed = executor.execute_query(sql);
+        fn generate_report<P: Params + Serialize>(
+            executor: TreeQLiteExecutor,
+            sql: &str,
+            params: P,
+        ) -> Report {
+            let params_json = serde_json::to_string(&params).unwrap();
 
-            let translate_and_resolve_result = executor.translate_query_and_resolve_paths(sql);
+            let rows_changed_or_error = executor.execute_query(sql, params);
 
-            let dumps_by_path = translate_and_resolve_result.map(|(_, db_paths_by_reference)| {
-                db_paths_by_reference
-                    .into_values()
-                    .map(|path| {
-                        let dump = dump_sqlite_file(&path).unwrap();
-                        let dump_lines =
-                            dump.split("\n").map(|s| s.to_string()).collect::<Vec<_>>();
-                        (path, dump_lines)
-                    })
-                    .collect()
-            });
+            let (_, db_paths_by_reference) = executor
+                .translate_query_and_resolve_paths(sql)
+                .unwrap_or(("".to_owned(), HashMap::new()));
+
+            let dumps_by_path = db_paths_by_reference
+                .into_values()
+                .map(|path| {
+                    let dump = dump_sqlite_file(&path).unwrap();
+                    let dump_lines = dump.split("\n").map(|s| s.to_string()).collect::<Vec<_>>();
+                    (path, dump_lines)
+                })
+                .collect();
 
             let original_query = split_by_line_and_trim_spaces(sql);
 
             Report {
                 dumps_by_path,
-                rows_changed: rows_changed.map(|n| n as isize).unwrap_or(isize::MIN),
                 original_query,
+                params: params_json,
+                rows_changed_or_error,
             }
         }
 
@@ -257,7 +262,7 @@ mod tests {
                 );
             "#;
 
-            let report = generate_report(make_executor("create_table"), sql);
+            let report = generate_report(make_executor("create_table"), sql, ());
             insta::assert_yaml_snapshot!(report);
         }
 
@@ -275,7 +280,7 @@ mod tests {
             )
         "#;
 
-            let report = generate_report(make_executor("create_table_using_parent"), sql);
+            let report = generate_report(make_executor("create_table_using_parent"), sql, ());
             insta::assert_yaml_snapshot!(report);
         }
 
@@ -293,7 +298,7 @@ mod tests {
             )
         "#;
 
-            let report = generate_report(make_executor("create_table_using_curdir"), sql);
+            let report = generate_report(make_executor("create_table_using_curdir"), sql, ());
             insta::assert_yaml_snapshot!(report);
         }
 
@@ -314,6 +319,7 @@ mod tests {
             let report = generate_report(
                 make_executor("create_table_disallow_compound_identifier"),
                 sql,
+                (),
             );
             insta::assert_yaml_snapshot!(report);
         }
@@ -322,7 +328,7 @@ mod tests {
         fn unsupported_statement_type() {
             let sql = r#"close my_eyes;"#;
 
-            let report = generate_report(make_executor("unsupported_statement_type"), sql);
+            let report = generate_report(make_executor("unsupported_statement_type"), sql, ());
             insta::assert_yaml_snapshot!(report);
         }
 
@@ -340,7 +346,7 @@ mod tests {
             )
         "#;
 
-            let report = generate_report(make_executor("create_table_outside_home"), sql);
+            let report = generate_report(make_executor("create_table_outside_home"), sql, ());
             insta::assert_yaml_snapshot!(report);
         }
 
@@ -358,7 +364,7 @@ mod tests {
             )
         "#;
 
-            let report = generate_report(make_executor("create_table_root"), sql);
+            let report = generate_report(make_executor("create_table_root"), sql, ());
             insta::assert_yaml_snapshot!(report);
         }
 
@@ -376,8 +382,11 @@ mod tests {
             )
         "#;
 
-            let report =
-                generate_report(make_executor("create_table_outside_home_using_parent"), sql);
+            let report = generate_report(
+                make_executor("create_table_outside_home_using_parent"),
+                sql,
+                (),
+            );
             insta::assert_yaml_snapshot!(report);
         }
 
@@ -393,12 +402,13 @@ mod tests {
                             score INT NOT NULL,
                         );
                     "#,
+                    (),
                 )
                 .unwrap();
 
             let sql = r#"CREATE INDEX "scoreIndex" ON "~/books/eloScores" (score)"#;
 
-            let report = generate_report(executor, sql);
+            let report = generate_report(executor, sql, ());
             insta::assert_yaml_snapshot!(report);
         }
 
@@ -406,7 +416,7 @@ mod tests {
         fn create_index_compound_name() {
             let sql = r#"CREATE INDEX a.b ON "~/books/eloScores" (score)"#;
 
-            let report = generate_report(make_executor("create_index_compound_name"), sql);
+            let report = generate_report(make_executor("create_index_compound_name"), sql, ());
             insta::assert_yaml_snapshot!(report);
         }
 
@@ -414,35 +424,39 @@ mod tests {
         fn create_index_compound_table_name() {
             let sql = r#"CREATE INDEX a ON x.y (score)"#;
 
-            let report = generate_report(make_executor("create_index_compound_table_name"), sql);
+            let report =
+                generate_report(make_executor("create_index_compound_table_name"), sql, ());
             insta::assert_yaml_snapshot!(report);
         }
 
-        // #[test]
-        // fn insert() {
-        //     let executor = make_executor("insert");
+        #[test]
+        fn insert() {
+            let executor = make_executor("insert");
 
-        //     executor
-        //         .execute_query(
-        //             r#"
-        //                 CREATE TABLE IF NOT EXISTS "~/books/matches" (
-        //                     "id" TEXT PRIMARY KEY NOT NULL,
-        //                     "loserId" TEXT NOT NULL,
-        //                     "winnerId" TEXT NOT NULL,
-        //                     "matchDate" TEXT NOT NULL
-        //                 );
-        //             "#,
-        //         )
-        //         .unwrap();
+            executor
+                .execute_query(
+                    r#"
+                        CREATE TABLE IF NOT EXISTS "~/books/matches" (
+                            "id" TEXT PRIMARY KEY NOT NULL,
+                            "loserId" TEXT NOT NULL,
+                            "winnerId" TEXT NOT NULL,
+                            "matchDate" TEXT NOT NULL
+                        );
+                    "#,
+                    (),
+                )
+                .unwrap();
 
-        //     let sql = r#"
-        //         INSERT INTO "~/books/matches" ("id", "loserId", "winnerId", "matchDate")
-        //         VALUES (?, ?, DATETIME('now'), CURRENT_TIMESTAMP)
-        //     "#;
-
-        //     let report = generate_report(executor, sql);
-        //     insta::assert_yaml_snapshot!(report);
-        // }
+            let report = generate_report(
+                executor,
+                r#"
+                    INSERT INTO "~/books/matches" ("id", "loserId", "winnerId", "matchDate")
+                    VALUES (?, ?, ?, ?)
+                "#,
+                ["match1", "loser1", "winner1", "today"],
+            );
+            insta::assert_yaml_snapshot!(report);
+        }
 
         #[test]
         fn insert_from_select() {
@@ -458,6 +472,7 @@ mod tests {
                             "matchDate" TEXT NOT NULL
                         );
                     "#,
+                    (),
                 )
                 .unwrap();
 
@@ -469,26 +484,29 @@ mod tests {
                             ("heyyuy", "loser", "weener", "today"),
                             ("459", "looser", "winner", "tomorrow")
                     "#,
+                    (),
                 )
                 .unwrap();
 
-            let sql = r#"
-                INSERT INTO "~/books/matches" ("id", "loserId", "winnerId", "matchDate")
-                SELECT "~/books/matches"."id" || '2', "loserId", "~/books/matches"."winnerId", "matchDate" FROM "~/books/matches"
-            "#;
-
-            let report = generate_report(executor, sql);
+            let report = generate_report(
+                executor,
+                r#"
+                    INSERT INTO "~/books/matches" ("id", "loserId", "winnerId", "matchDate")
+                    SELECT "~/books/matches"."id" || '2', "loserId", "~/books/matches"."winnerId", "matchDate" FROM "~/books/matches"
+                "#,
+                (),
+            );
             insta::assert_yaml_snapshot!(report);
         }
 
         #[test]
         fn parser_error() {
             let sql = r#"
-            INSERT INTO "~/books/matches" ("id", "loserId", "winnerId", "matchDate")
-            VALUES (?, ?, DATETIME('now'), CURRENT_TIMESTAMP('derp))
-        "#;
+                INSERT INTO "~/books/matches" ("id", "loserId", "winnerId", "matchDate")
+                VALUES (?, ?, DATETIME('now'), CURRENT_TIMESTAMP('derp))
+            "#;
 
-            let report = generate_report(make_executor("parser_error"), sql);
+            let report = generate_report(make_executor("parser_error"), sql, ());
             insta::assert_yaml_snapshot!(report);
         }
 
@@ -691,18 +709,60 @@ mod tests {
         //     insta::assert_yaml_snapshot!(report);
         // }
 
-        // #[test]
-        // fn on_conflict_do_nothing() {
-        //     let sql = r#"
-        //     insert into "~/my-data-scraper/reelgood/shows-and-movies"
-        //     ("format", "isWatched", "name", "url", "imageUrl")
-        //     values (?, ?, ?, ?, ?)
-        //     on conflict do nothing
-        // "#;
+        #[test]
+        fn on_conflict_do_nothing() {
+            let executor = make_executor("on_conflict_do_nothing");
 
-        //     let report = generate_report(make_executor("on_conflict_do_nothing"), sql);
-        //     insta::assert_yaml_snapshot!(report);
-        // }
+            executor
+                .execute_query(
+                    r#"
+                        CREATE TABLE IF NOT EXISTS "~/my-data-scraper/reelgood/shows-and-movies" (
+                            "format" TEXT NOT NULL,
+                            "isWatched" BOOLEAN NOT NULL,
+                            "name" TEXT NOT NULL,
+                            "url" TEXT PRIMARY KEY NOT NULL,
+                            "imageUrl" TEXT NOT NULL
+                        );
+                    "#,
+                    (),
+                )
+                .unwrap();
+
+            executor
+                .execute_query(
+                    r#"
+                        INSERT INTO "~/my-data-scraper/reelgood/shows-and-movies"
+                        ("format", "isWatched", "name", "url", "imageUrl")
+                        VALUES (?, ?, ?, ?, ?)
+                    "#,
+                    params![
+                        "movie",
+                        true,
+                        "The Matrix",
+                        "https://reelgood.com/movie/the-matrix",
+                        "https://reelgood.com/movie/the-matrix/image",
+                    ],
+                )
+                .unwrap();
+
+            let report = generate_report(
+                executor,
+                r#"
+                    insert into "~/my-data-scraper/reelgood/shows-and-movies"
+                    ("format", "isWatched", "name", "url", "imageUrl")
+                    values (?, ?, ?, ?, ?)
+                    on conflict do nothing
+                "#,
+                (
+                    "moovie",
+                    false,
+                    "overriiiiiide",
+                    "https://reelgood.com/movie/the-matrix",
+                    "https://reelgood.com/movie/the-matrix/no-image",
+                ),
+            );
+            insta::assert_yaml_snapshot!(report);
+        }
 
         // #[test]
         // fn union_separate_scopes() {

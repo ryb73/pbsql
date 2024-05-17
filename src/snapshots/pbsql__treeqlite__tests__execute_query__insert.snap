@@ -1,0 +1,26 @@
+---
+source: src/treeqlite.rs
+expression: report
+---
+dumps_by_path:
+  "./test-db/insert/books/matches.tql.sqlite3":
+    - PRAGMA foreign_keys = OFF;
+    - BEGIN
+    - TRANSACTION;
+    - CREATE TABLE table_contents (
+    - "  \"id\" TEXT PRIMARY KEY NOT NULL,"
+    - "  \"loserId\" TEXT NOT NULL,"
+    - "  \"winnerId\" TEXT NOT NULL,"
+    - "  \"matchDate\" TEXT NOT NULL"
+    - );
+    - INSERT INTO
+    - "  table_contents"
+    - VALUES
+    - "('match1', 'loser1', 'winner1', 'today');"
+    - COMMIT;
+rows_changed_or_error:
+  Ok: 1
+original_query:
+  - "INSERT INTO \"~/books/matches\" (\"id\", \"loserId\", \"winnerId\", \"matchDate\")"
+  - "VALUES (?, ?, ?, ?)"
+params: "[\"match1\",\"loser1\",\"winner1\",\"today\"]"

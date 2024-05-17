@@ -3,22 +3,22 @@ source: src/treeqlite.rs
 expression: report
 ---
 dumps_by_path:
-  Ok:
-    "./test-db/create_table_using_parent/books/things.tql.sqlite3":
-      - PRAGMA foreign_keys = OFF;
-      - BEGIN
-      - TRANSACTION;
-      - CREATE TABLE table_contents (
-      - "  \"excluded\" BOOLEAN NOT NULL DEFAULT false,"
-      - "  \"externalLink\" TEXT NOT NULL,"
-      - "  \"externalLinkTitle\" TEXT NOT NULL,"
-      - "  \"id\" TEXT PRIMARY KEY NOT NULL,"
-      - "  \"imageUrl\" TEXT NOT NULL,"
-      - "  \"subtitle\" TEXT NULL,"
-      - "  \"title\" TEXT NOT NULL"
-      - );
-      - COMMIT;
-rows_changed: 0
+  "./test-db/create_table_using_parent/books/things.tql.sqlite3":
+    - PRAGMA foreign_keys = OFF;
+    - BEGIN
+    - TRANSACTION;
+    - CREATE TABLE table_contents (
+    - "  \"excluded\" BOOLEAN NOT NULL DEFAULT false,"
+    - "  \"externalLink\" TEXT NOT NULL,"
+    - "  \"externalLinkTitle\" TEXT NOT NULL,"
+    - "  \"id\" TEXT PRIMARY KEY NOT NULL,"
+    - "  \"imageUrl\" TEXT NOT NULL,"
+    - "  \"subtitle\" TEXT NULL,"
+    - "  \"title\" TEXT NOT NULL"
+    - );
+    - COMMIT;
+rows_changed_or_error:
+  Ok: 0
 original_query:
   - "CREATE TABLE IF NOT EXISTS \"~/books/bings/../things\" ("
   - "    \"excluded\" BOOLEAN NOT NULL DEFAULT FALSE,"
@@ -29,3 +29,4 @@ original_query:
   - "    \"subtitle\" TEXT NULL,"
   - "    \"title\" TEXT NOT NULL"
   - )
+params: "null"

@@ -2,8 +2,9 @@
 source: src/treeqlite.rs
 expression: report
 ---
-dumps_by_path:
+dumps_by_path: {}
+rows_changed_or_error:
   Err: "not implemented: Statement::Close"
-rows_changed: -9223372036854775808
 original_query:
   - close my_eyes;
+params: "null"

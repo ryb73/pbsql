@@ -2,9 +2,9 @@
 source: src/treeqlite.rs
 expression: report
 ---
-dumps_by_path:
+dumps_by_path: {}
+rows_changed_or_error:
   Err: "Path must start with ~/: etc/passwd"
-rows_changed: -9223372036854775808
 original_query:
   - "CREATE TABLE IF NOT EXISTS \"~/hi/../../etc/passwd\" ("
   - "    \"excluded\" BOOLEAN NOT NULL DEFAULT FALSE,"
@@ -15,3 +15,4 @@ original_query:
   - "    \"subtitle\" TEXT NULL,"
   - "    \"title\" TEXT NOT NULL"
   - )
+params: "null"

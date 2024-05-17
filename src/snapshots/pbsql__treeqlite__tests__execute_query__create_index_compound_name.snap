@@ -2,8 +2,9 @@
 source: src/treeqlite.rs
 expression: report
 ---
-dumps_by_path:
+dumps_by_path: {}
+rows_changed_or_error:
   Err: "Expected 1 identifiers for the index name, got: [\"a\", \"b\"]"
-rows_changed: -9223372036854775808
 original_query:
   - "CREATE INDEX a.b ON \"~/books/eloScores\" (score)"
+params: "null"
